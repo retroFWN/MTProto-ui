@@ -59,8 +59,12 @@
             <h3 class="font-bold text-lg mb-2"><i class="fas fa-microchip mr-2"></i>Proxy Engine</h3>
             <p class="mb-4" style="color:var(--text-secondary);font-size:13px">Choose which MTProto proxy engine to use for new proxies</p>
             <div id="backendCards" class="backend-cards"></div>
-            <button class="btn btn-primary mt-4" onclick="saveBackend()"><i class="fas fa-save mr-1"></i> Apply Engine</button>
-            <span id="backendStatus" class="ml-3" style="color:var(--text-secondary);font-size:13px"></span>
+            <div class="mt-4" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                <button class="btn btn-primary" onclick="saveBackend()"><i class="fas fa-save mr-1"></i> Apply Engine</button>
+                <button class="btn btn-outline" onclick="pullImage()"><i class="fas fa-download mr-1"></i> Pull Image</button>
+                <span id="backendStatus" style="color:var(--text-secondary);font-size:13px"></span>
+                <span id="pullStatus" style="color:var(--text-secondary);font-size:13px"></span>
+            </div>
         </div>
 
         <!-- Change Password -->
@@ -113,14 +117,6 @@
             </div>
         </div>
 
-        <!-- Docker -->
-        <div class="card mb-6">
-            <h3 class="font-bold text-lg mb-4"><i class="fab fa-docker mr-2"></i>Docker</h3>
-            <p class="mb-3" id="dockerImage" style="color:var(--text-secondary)">Image: <code>...</code></p>
-            <button class="btn btn-outline" onclick="pullImage()"><i class="fas fa-download mr-1"></i> Pull Latest Image</button>
-            <span id="pullStatus" class="ml-3" style="color:var(--text-secondary)"></span>
-        </div>
-
         <!-- About -->
         <div class="card">
             <h3 class="font-bold text-lg mb-2"><i class="fas fa-info-circle mr-2"></i>About</h3>
@@ -162,7 +158,6 @@
                 `;
                 container.appendChild(card);
             });
-            updateDockerImage();
         } catch (e) { console.error(e); }
     }
 
@@ -171,15 +166,6 @@
         document.querySelectorAll('.backend-card').forEach(c => {
             c.classList.toggle('active', c.dataset.id === id);
         });
-        updateDockerImage();
-    }
-
-    function updateDockerImage() {
-        const activeCard = document.querySelector(`.backend-card[data-id="${selectedBackend}"]`);
-        if (activeCard) {
-            const img = activeCard.querySelector('code').textContent;
-            document.getElementById('dockerImage').innerHTML = `Image: <code>${img}</code>`;
-        }
     }
 
     async function saveBackend() {
