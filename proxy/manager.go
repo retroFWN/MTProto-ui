@@ -186,17 +186,77 @@ func TrafficCollector(intervalSec int) {
 		database.DB.Where("enabled = ?", true).Find(&proxies)
 
 		for _, p := range proxies {
-			stats := GetContainerStats(p.ID)
-			rx := ParseNetBytes(stats.NetRx)
-			tx := ParseNetBytes(stats.NetTx)
-			if rx > 0 || tx > 0 {
-				database.DB.Model(&p).Updates(map[string]interface{}{
-					"traffic_down": rx,
-					"traffic_up":   tx,
-				})
+			backend := GetBackend(p.Backend)
+
+			// If backend supports per-user stats (telemt), use its API
+			if um, ok := backend.(UserManager); ok {
+				users, err := um.ListUsers(p.Port)
+				if err != nil {
+					// Fallback to docker stats
+					collectDockerStats(&p)
+					continue
+				}
+
+				var totalOctets int64
+				// Update per-client traffic from telemt live data
+				var clients []database.Client
+				database.DB.Where("proxy_id = ?", p.ID).Find(&clients)
+
+				for _, cl := range clients {
+					for _, u := range users {
+						if MatchSecret(cl.Secret, u.Secret) {
+							// total_octets is bidirectional — split evenly as approximation
+							half := u.TotalOctets / 2
+							database.DB.Model(&cl).Updates(map[string]interface{}{
+								"traffic_down": half,
+								"traffic_up":   u.TotalOctets - half,
+							})
+							totalOctets += u.TotalOctets
+							break
+						}
+					}
+				}
+
+				if totalOctets > 0 {
+					database.DB.Model(&p).Updates(map[string]interface{}{
+						"traffic_down": totalOctets / 2,
+						"traffic_up":   totalOctets - totalOctets/2,
+					})
+				}
+			} else {
+				collectDockerStats(&p)
 			}
 		}
 	}
+}
+
+func collectDockerStats(p *database.Proxy) {
+	stats := GetContainerStats(p.ID)
+	rx := ParseNetBytes(stats.NetRx)
+	tx := ParseNetBytes(stats.NetTx)
+	if rx > 0 || tx > 0 {
+		database.DB.Model(p).Updates(map[string]interface{}{
+			"traffic_down": rx,
+			"traffic_up":   tx,
+		})
+	}
+}
+
+// MatchSecret compares a panel secret (ee + domain_hex + padding) with a telemt raw secret.
+func MatchSecret(panelSecret, telemtSecret string) bool {
+	// Panel stores "ee" + 30 hex chars, telemt stores 32 hex chars (without "ee")
+	raw := panelSecret
+	if len(raw) > 2 && raw[:2] == "ee" {
+		raw = raw[2:]
+	}
+	// Pad to 32 for comparison
+	for len(raw) < 32 {
+		raw += "0"
+	}
+	if len(raw) > 32 {
+		raw = raw[:32]
+	}
+	return strings.EqualFold(raw, telemtSecret)
 }
 
 func ExpiryChecker() {

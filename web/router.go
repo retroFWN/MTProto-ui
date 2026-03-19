@@ -48,6 +48,7 @@ func NewRouter(cfg *config.Config) *gin.Engine {
 		api.POST("/proxies/:id/stop", StopProxyHandler)
 		api.POST("/proxies/:id/restart", RestartProxyHandler)
 		api.GET("/proxies/:id/stats", ProxyStatsHandler)
+		api.GET("/proxies/:id/live", ProxyLiveHandler)
 		api.GET("/proxies/:id/logs", ProxyLogsHandler)
 
 		api.GET("/proxies/:id/clients", ListClients)

@@ -23,6 +23,36 @@ type Backend interface {
 	PullImage() error
 }
 
+// UserManager is an optional interface for backends that support per-user management via API.
+type UserManager interface {
+	// AddUser creates a user on the running proxy. Returns error if proxy not reachable.
+	AddUser(proxyPort int, username, secret string, maxConns int, quotaBytes int64, expiryUnix int64) error
+	// RemoveUser deletes a user from the running proxy.
+	RemoveUser(proxyPort int, username string) error
+	// ListUsers returns live per-user stats from the running proxy.
+	ListUsers(proxyPort int) ([]UserStats, error)
+	// GetSummary returns overall proxy stats.
+	GetSummary(proxyPort int) (*ProxySummary, error)
+}
+
+// UserStats holds live per-user data from telemt API.
+type UserStats struct {
+	Username           string   `json:"username"`
+	Secret             string   `json:"secret"`
+	CurrentConnections int      `json:"current_connections"`
+	TotalOctets        int64    `json:"total_octets"`
+	ActiveUniqueIPs    int      `json:"active_unique_ips"`
+	ActiveIPList       []string `json:"active_unique_ips_list"`
+}
+
+// ProxySummary holds overall proxy stats.
+type ProxySummary struct {
+	UptimeSeconds      int   `json:"uptime_seconds"`
+	ConnectionsTotal   int64 `json:"connections_total"`
+	ConfiguredUsers    int   `json:"configured_users"`
+	CurrentConnections int64 `json:"current_connections"`
+}
+
 // ── Registry ────────────────────────────────────────────────────────────
 
 var backends = map[string]Backend{}

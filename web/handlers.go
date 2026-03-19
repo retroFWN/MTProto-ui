@@ -404,6 +404,68 @@ func ProxyLogsHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"logs": proxy.GetContainerLogs(p.ID, tail)})
 }
 
+func ProxyLiveHandler(c *gin.Context) {
+	id, ok := parseID(c, "id")
+	if !ok {
+		return
+	}
+	var p database.Proxy
+	if database.DB.First(&p, id).Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"detail": "Proxy not found"})
+		return
+	}
+
+	backend := proxy.GetBackend(p.Backend)
+	um, isUserManager := backend.(proxy.UserManager)
+	if !isUserManager {
+		c.JSON(http.StatusOK, gin.H{"supported": false})
+		return
+	}
+
+	users, err := um.ListUsers(p.Port)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"supported": true, "error": err.Error()})
+		return
+	}
+
+	summary, _ := um.GetSummary(p.Port)
+
+	// Match telemt users to panel clients by secret
+	var clients []database.Client
+	database.DB.Where("proxy_id = ?", p.ID).Find(&clients)
+
+	type liveClient struct {
+		ClientID           uint     `json:"client_id"`
+		Name               string   `json:"name"`
+		CurrentConnections int      `json:"current_connections"`
+		TotalOctets        int64    `json:"total_octets"`
+		ActiveUniqueIPs    int      `json:"active_unique_ips"`
+		ActiveIPList       []string `json:"active_ips"`
+	}
+	result := make([]liveClient, 0)
+	for _, cl := range clients {
+		for _, u := range users {
+			if proxy.MatchSecret(cl.Secret, u.Secret) {
+				result = append(result, liveClient{
+					ClientID:           cl.ID,
+					Name:               cl.Name,
+					CurrentConnections: u.CurrentConnections,
+					TotalOctets:        u.TotalOctets,
+					ActiveUniqueIPs:    u.ActiveUniqueIPs,
+					ActiveIPList:       u.ActiveIPList,
+				})
+				break
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"supported": true,
+		"users":     result,
+		"summary":   summary,
+	})
+}
+
 // ── Clients ──────────────────────────────────────────────────────────────
 
 func ListClients(c *gin.Context) {
@@ -472,6 +534,13 @@ func CreateClient(c *gin.Context) {
 	}
 	database.DB.Create(&cl)
 
+	// Sync to telemt API if running
+	backend := proxy.GetBackend(p.Backend)
+	if um, ok := backend.(proxy.UserManager); ok {
+		username := fmt.Sprintf("user_%d", cl.ID)
+		um.AddUser(p.Port, username, secret, 0, req.TrafficLimit, req.ExpiryTime)
+	}
+
 	serverIP := database.GetServerIP()
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -533,6 +602,16 @@ func DeleteClient(c *gin.Context) {
 	clientID, ok := parseID(c, "cid")
 	if !ok {
 		return
+	}
+
+	// Remove from telemt API if applicable
+	var p database.Proxy
+	if database.DB.First(&p, proxyID).Error == nil {
+		backend := proxy.GetBackend(p.Backend)
+		if um, ok := backend.(proxy.UserManager); ok {
+			username := fmt.Sprintf("user_%d", clientID)
+			um.RemoveUser(p.Port, username)
+		}
 	}
 
 	result := database.DB.Where("id = ? AND proxy_id = ?", clientID, proxyID).Delete(&database.Client{})

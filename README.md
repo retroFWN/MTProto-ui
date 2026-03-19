@@ -176,6 +176,7 @@ mtproto/
 | POST | `/api/proxies/:id/stop` | Остановить контейнер |
 | POST | `/api/proxies/:id/restart` | Перезапустить контейнер |
 | GET | `/api/proxies/:id/stats` | CPU/RAM/Net контейнера |
+| GET | `/api/proxies/:id/live` | Per-user live данные (telemt) |
 | GET | `/api/proxies/:id/logs` | Логи контейнера |
 
 ### Clients
@@ -218,6 +219,27 @@ mtproto/
 | `PANEL_DOMAIN` | — | Домен для auto-SSL (Let's Encrypt) |
 | `SECRET_KEY` | auto | Ключ JWT (сохраняется в `data/.secret_key`) |
 | `PROXY_BACKEND` | `official` | Движок по умолчанию (`official` или `telemt`) |
+
+## Ссылки и источники
+
+### Проект
+- [3x-ui](https://github.com/MHSanaei/3x-ui) — вдохновение для панели (Xray + Go + Gin)
+- [MTProxyMax](https://github.com/SamNet-dev/MTProxyMax) — менеджер MTProto на базе telemt
+
+### Прокси-движки
+- [telegrammessenger/proxy](https://hub.docker.com/r/telegrammessenger/proxy/) — официальный MTProto прокси (C)
+- [telemt/telemt](https://github.com/telemt/telemt) — MTProxy на Rust + Tokio (исходники)
+- [An0nX/telemt-docker](https://github.com/An0nX/telemt-docker) — Docker-образ для telemt
+- [whn0thacked/telemt-docker](https://hub.docker.com/r/whn0thacked/telemt-docker) — Docker Hub образ telemt
+- [Документация telemt API](https://github.com/telemt/telemt/blob/main/docs/API.md)
+- [Параметры конфигурации telemt](https://github.com/telemt/telemt/blob/main/docs/CONFIG_PARAMS.en.md)
+
+### Стек
+- [Go](https://go.dev/) — язык панели
+- [Gin](https://github.com/gin-gonic/gin) — HTTP-фреймворк
+- [GORM](https://gorm.io/) — ORM для SQLite
+- [aiogram](https://docs.aiogram.dev/) — Telegram Bot Framework (Python)
+- [Let's Encrypt](https://letsencrypt.org/) — Auto-SSL
 
 ## Лицензия
 

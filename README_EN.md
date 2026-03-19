@@ -176,6 +176,7 @@ All `/api/` endpoints require authentication (cookie or `Authorization: Bearer <
 | POST | `/api/proxies/:id/stop` | Stop container |
 | POST | `/api/proxies/:id/restart` | Restart container |
 | GET | `/api/proxies/:id/stats` | Container CPU/RAM/Net |
+| GET | `/api/proxies/:id/live` | Per-user live stats (telemt) |
 | GET | `/api/proxies/:id/logs` | Container logs |
 
 ### Clients
@@ -218,6 +219,27 @@ Authorization: `X-Bot-Token` header with the panel's SECRET_KEY.
 | `PANEL_DOMAIN` | — | Domain for auto-SSL (Let's Encrypt) |
 | `SECRET_KEY` | auto | JWT key (persisted to `data/.secret_key`) |
 | `PROXY_BACKEND` | `official` | Default engine (`official` or `telemt`) |
+
+## Links & Sources
+
+### Project
+- [3x-ui](https://github.com/MHSanaei/3x-ui) — inspiration for the panel (Xray + Go + Gin)
+- [MTProxyMax](https://github.com/SamNet-dev/MTProxyMax) — MTProto manager built on telemt
+
+### Proxy Engines
+- [telegrammessenger/proxy](https://hub.docker.com/r/telegrammessenger/proxy/) — official MTProto proxy (C)
+- [telemt/telemt](https://github.com/telemt/telemt) — MTProxy on Rust + Tokio (source code)
+- [An0nX/telemt-docker](https://github.com/An0nX/telemt-docker) — Docker image for telemt
+- [whn0thacked/telemt-docker](https://hub.docker.com/r/whn0thacked/telemt-docker) — Docker Hub image for telemt
+- [telemt API docs](https://github.com/telemt/telemt/blob/main/docs/API.md)
+- [telemt config reference](https://github.com/telemt/telemt/blob/main/docs/CONFIG_PARAMS.en.md)
+
+### Tech Stack
+- [Go](https://go.dev/) — panel language
+- [Gin](https://github.com/gin-gonic/gin) — HTTP framework
+- [GORM](https://gorm.io/) — SQLite ORM
+- [aiogram](https://docs.aiogram.dev/) — Telegram Bot Framework (Python)
+- [Let's Encrypt](https://letsencrypt.org/) — Auto-SSL
 
 ## License
 
