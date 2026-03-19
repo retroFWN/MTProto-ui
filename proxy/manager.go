@@ -14,10 +14,16 @@ import (
 	"mtproxy-panel/database"
 )
 
-const (
-	ProxyImage    = "telegrammessenger/proxy"
-	ContainerPfx  = "mtproxy-"
+var (
+	ProxyImage   = "telegrammessenger/proxy"
+	ContainerPfx = "mtproxy-"
 )
+
+// InitConfig sets proxy image and container prefix from config.
+func InitConfig(image, prefix string) {
+	ProxyImage = image
+	ContainerPfx = prefix
+}
 
 func ContainerName(proxyID uint) string {
 	return fmt.Sprintf("%s%d", ContainerPfx, proxyID)
@@ -168,21 +174,26 @@ func PullImage() error {
 
 func ParseNetBytes(s string) int64 {
 	s = strings.TrimSpace(strings.ToUpper(s))
-	multipliers := map[string]float64{
-		"TB":  math.Pow(1024, 4),
-		"GIB": math.Pow(1024, 3),
-		"GB":  math.Pow(1024, 3),
-		"MIB": math.Pow(1024, 2),
-		"MB":  math.Pow(1024, 2),
-		"KIB": 1024,
-		"KB":  1024,
-		"B":   1,
+	// Ordered longest-suffix-first to avoid "GB" matching "B"
+	suffixes := []struct {
+		suffix string
+		mult   float64
+	}{
+		{"TIB", math.Pow(1024, 4)},
+		{"TB", math.Pow(1024, 4)},
+		{"GIB", math.Pow(1024, 3)},
+		{"GB", math.Pow(1024, 3)},
+		{"MIB", math.Pow(1024, 2)},
+		{"MB", math.Pow(1024, 2)},
+		{"KIB", 1024},
+		{"KB", 1024},
+		{"B", 1},
 	}
-	for suffix, mult := range multipliers {
-		if strings.HasSuffix(s, suffix) {
-			numStr := strings.TrimSpace(s[:len(s)-len(suffix)])
+	for _, entry := range suffixes {
+		if strings.HasSuffix(s, entry.suffix) {
+			numStr := strings.TrimSpace(s[:len(s)-len(entry.suffix)])
 			if val, err := strconv.ParseFloat(numStr, 64); err == nil {
-				return int64(val * mult)
+				return int64(val * entry.mult)
 			}
 		}
 	}

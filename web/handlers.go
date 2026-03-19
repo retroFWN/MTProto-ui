@@ -88,6 +88,10 @@ func ChangePassword(c *gin.Context) {
 	}
 
 	user := currentUser(c)
+	if user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"detail": "Not authenticated"})
+		return
+	}
 	if !auth.CheckPassword(req.OldPassword, user.PasswordHash) {
 		c.JSON(http.StatusBadRequest, gin.H{"detail": "Wrong current password"})
 		return
@@ -222,7 +226,10 @@ func CreateProxy(c *gin.Context) {
 }
 
 func UpdateProxy(c *gin.Context) {
-	id := parseID(c, "id")
+	id, ok := parseID(c, "id")
+	if !ok {
+		return
+	}
 	var p database.Proxy
 	if database.DB.First(&p, id).Error != nil {
 		c.JSON(http.StatusNotFound, gin.H{"detail": "Proxy not found"})
@@ -279,7 +286,10 @@ func UpdateProxy(c *gin.Context) {
 }
 
 func DeleteProxy(c *gin.Context) {
-	id := parseID(c, "id")
+	id, ok := parseID(c, "id")
+	if !ok {
+		return
+	}
 	var p database.Proxy
 	if database.DB.First(&p, id).Error != nil {
 		c.JSON(http.StatusNotFound, gin.H{"detail": "Proxy not found"})
@@ -287,13 +297,15 @@ func DeleteProxy(c *gin.Context) {
 	}
 
 	proxy.StopProxy(p.ID)
-	database.DB.Where("proxy_id = ?", p.ID).Delete(&database.Client{})
-	database.DB.Delete(&p)
+	database.DB.Delete(&p) // CASCADE deletes clients
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
 func StartProxyHandler(c *gin.Context) {
-	id := parseID(c, "id")
+	id, ok := parseID(c, "id")
+	if !ok {
+		return
+	}
 	var p database.Proxy
 	if database.DB.First(&p, id).Error != nil {
 		c.JSON(http.StatusNotFound, gin.H{"detail": "Proxy not found"})
@@ -316,7 +328,10 @@ func StartProxyHandler(c *gin.Context) {
 }
 
 func StopProxyHandler(c *gin.Context) {
-	id := parseID(c, "id")
+	id, ok := parseID(c, "id")
+	if !ok {
+		return
+	}
 	var p database.Proxy
 	if database.DB.First(&p, id).Error != nil {
 		c.JSON(http.StatusNotFound, gin.H{"detail": "Proxy not found"})
@@ -329,7 +344,10 @@ func StopProxyHandler(c *gin.Context) {
 }
 
 func RestartProxyHandler(c *gin.Context) {
-	id := parseID(c, "id")
+	id, ok := parseID(c, "id")
+	if !ok {
+		return
+	}
 	var p database.Proxy
 	if database.DB.First(&p, id).Error != nil {
 		c.JSON(http.StatusNotFound, gin.H{"detail": "Proxy not found"})
@@ -352,7 +370,10 @@ func RestartProxyHandler(c *gin.Context) {
 }
 
 func ProxyStatsHandler(c *gin.Context) {
-	id := parseID(c, "id")
+	id, ok := parseID(c, "id")
+	if !ok {
+		return
+	}
 	var p database.Proxy
 	if database.DB.First(&p, id).Error != nil {
 		c.JSON(http.StatusNotFound, gin.H{"detail": "Proxy not found"})
@@ -362,7 +383,10 @@ func ProxyStatsHandler(c *gin.Context) {
 }
 
 func ProxyLogsHandler(c *gin.Context) {
-	id := parseID(c, "id")
+	id, ok := parseID(c, "id")
+	if !ok {
+		return
+	}
 	tail, _ := strconv.Atoi(c.DefaultQuery("tail", "50"))
 	var p database.Proxy
 	if database.DB.First(&p, id).Error != nil {
@@ -375,7 +399,10 @@ func ProxyLogsHandler(c *gin.Context) {
 // ── Clients ──────────────────────────────────────────────────────────────
 
 func ListClients(c *gin.Context) {
-	proxyID := parseID(c, "id")
+	proxyID, ok := parseID(c, "id")
+	if !ok {
+		return
+	}
 	var p database.Proxy
 	if database.DB.First(&p, proxyID).Error != nil {
 		c.JSON(http.StatusNotFound, gin.H{"detail": "Proxy not found"})
@@ -406,7 +433,10 @@ func ListClients(c *gin.Context) {
 }
 
 func CreateClient(c *gin.Context) {
-	proxyID := parseID(c, "id")
+	proxyID, ok := parseID(c, "id")
+	if !ok {
+		return
+	}
 	var p database.Proxy
 	if database.DB.First(&p, proxyID).Error != nil {
 		c.JSON(http.StatusNotFound, gin.H{"detail": "Proxy not found"})
@@ -444,8 +474,14 @@ func CreateClient(c *gin.Context) {
 }
 
 func UpdateClient(c *gin.Context) {
-	proxyID := parseID(c, "id")
-	clientID := parseID(c, "cid")
+	proxyID, ok := parseID(c, "id")
+	if !ok {
+		return
+	}
+	clientID, ok := parseID(c, "cid")
+	if !ok {
+		return
+	}
 
 	var cl database.Client
 	if database.DB.Where("id = ? AND proxy_id = ?", clientID, proxyID).First(&cl).Error != nil {
@@ -482,8 +518,14 @@ func UpdateClient(c *gin.Context) {
 }
 
 func DeleteClient(c *gin.Context) {
-	proxyID := parseID(c, "id")
-	clientID := parseID(c, "cid")
+	proxyID, ok := parseID(c, "id")
+	if !ok {
+		return
+	}
+	clientID, ok := parseID(c, "cid")
+	if !ok {
+		return
+	}
 
 	result := database.DB.Where("id = ? AND proxy_id = ?", clientID, proxyID).Delete(&database.Client{})
 	if result.RowsAffected == 0 {
@@ -494,8 +536,14 @@ func DeleteClient(c *gin.Context) {
 }
 
 func ResetClientTraffic(c *gin.Context) {
-	proxyID := parseID(c, "id")
-	clientID := parseID(c, "cid")
+	proxyID, ok := parseID(c, "id")
+	if !ok {
+		return
+	}
+	clientID, ok := parseID(c, "cid")
+	if !ok {
+		return
+	}
 
 	result := database.DB.Model(&database.Client{}).
 		Where("id = ? AND proxy_id = ?", clientID, proxyID).
@@ -548,7 +596,11 @@ func PullImageHandler(c *gin.Context) {
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-func parseID(c *gin.Context, param string) uint {
-	id, _ := strconv.ParseUint(c.Param(param), 10, 32)
-	return uint(id)
+func parseID(c *gin.Context, param string) (uint, bool) {
+	id, err := strconv.ParseUint(c.Param(param), 10, 32)
+	if err != nil || id == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": "Invalid ID"})
+		return 0, false
+	}
+	return uint(id), true
 }

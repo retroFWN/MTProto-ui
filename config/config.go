@@ -42,11 +42,11 @@ func Load() *Config {
 }
 
 func baseDir() string {
-	exe, err := os.Executable()
-	if err != nil {
-		return "."
+	// Use working directory — works correctly with both "go run" and compiled binary
+	if wd, err := os.Getwd(); err == nil {
+		return wd
 	}
-	return filepath.Dir(exe)
+	return "."
 }
 
 func loadOrCreateSecret(path string) string {

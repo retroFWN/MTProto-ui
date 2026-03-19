@@ -15,6 +15,7 @@ func main() {
 
 	database.Init(cfg.DBPath)
 	database.Seed(cfg.DefaultUser, cfg.DefaultPass)
+	proxy.InitConfig(cfg.ProxyImage, cfg.ContainerPfx)
 
 	// Background tasks
 	go proxy.TrafficCollector(cfg.StatsInterval)
