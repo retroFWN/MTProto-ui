@@ -1,0 +1,131 @@
+{{define "dashboard.html"}}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard — MTProxy Panel</title>
+    <link href="/static/css/style.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div id="toast" class="toast"></div>
+
+    <div class="sidebar">
+        <div class="sidebar-brand"><i class="fas fa-paper-plane"></i><div><div class="name">MTProxy Panel</div><div class="ver">v1.0.0</div></div></div>
+        <nav>
+            <a href="/panel" class="active"><i class="fas fa-chart-line"></i> Dashboard</a>
+            <a href="/panel/proxies"><i class="fas fa-server"></i> Proxies</a>
+            <a href="/panel/settings"><i class="fas fa-cog"></i> Settings</a>
+        </nav>
+        <div class="sidebar-footer"><a href="#" onclick="logout()"><i class="fas fa-sign-out-alt mr-2"></i>Logout</a></div>
+    </div>
+
+    <div class="main">
+        <h1 class="page-title">Dashboard</h1>
+        <p class="page-sub">System overview and proxy statistics</p>
+
+        <div class="grid grid-4 mb-6">
+            <div class="card">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="stat-label">CPU</span><i class="fas fa-microchip" style="color:var(--accent)"></i>
+                </div>
+                <div class="stat-value" id="cpu-percent">--%</div>
+                <div class="progress-bar"><div class="progress-bar-fill" id="cpu-bar" style="width:0%;background:var(--accent)"></div></div>
+            </div>
+            <div class="card">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="stat-label">Memory</span><i class="fas fa-memory" style="color:var(--warning)"></i>
+                </div>
+                <div class="stat-value" id="mem-percent">--%</div>
+                <div class="progress-bar"><div class="progress-bar-fill" id="mem-bar" style="width:0%;background:var(--warning)"></div></div>
+                <div class="stat-label mt-2" id="mem-detail"></div>
+            </div>
+            <div class="card">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="stat-label">Disk</span><i class="fas fa-hdd" style="color:var(--success)"></i>
+                </div>
+                <div class="stat-value" id="disk-percent">--%</div>
+                <div class="progress-bar"><div class="progress-bar-fill" id="disk-bar" style="width:0%;background:var(--success)"></div></div>
+                <div class="stat-label mt-2" id="disk-detail"></div>
+            </div>
+            <div class="card">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="stat-label">Uptime</span><i class="fas fa-clock" style="color:var(--text-secondary)"></i>
+                </div>
+                <div class="stat-value" id="uptime" style="font-size:22px">--</div>
+                <div class="stat-label mt-2" id="hostname"></div>
+            </div>
+        </div>
+
+        <div class="grid grid-2 mb-6">
+            <div class="card">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="stat-label">Network Sent</span><i class="fas fa-arrow-up" style="color:var(--success)"></i>
+                </div>
+                <div class="stat-value" id="net-sent">--</div>
+            </div>
+            <div class="card">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="stat-label">Network Received</span><i class="fas fa-arrow-down" style="color:var(--accent)"></i>
+                </div>
+                <div class="stat-value" id="net-recv">--</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-bold">Proxies</h2>
+                <a href="/panel/proxies" class="btn btn-outline btn-sm">Manage <i class="fas fa-arrow-right ml-3"></i></a>
+            </div>
+            <div id="proxies-summary"><p style="color:var(--text-secondary)">Loading...</p></div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+    <script>
+    async function loadStatus() {
+        try {
+            const s = await api('/api/system/status');
+            document.getElementById('cpu-percent').textContent = s.cpu_percent.toFixed(1) + '%';
+            document.getElementById('cpu-bar').style.width = s.cpu_percent + '%';
+            document.getElementById('mem-percent').textContent = s.memory_percent.toFixed(1) + '%';
+            document.getElementById('mem-bar').style.width = s.memory_percent + '%';
+            document.getElementById('mem-detail').textContent = formatBytes(s.memory_used) + ' / ' + formatBytes(s.memory_total);
+            document.getElementById('disk-percent').textContent = s.disk_percent.toFixed(1) + '%';
+            document.getElementById('disk-bar').style.width = s.disk_percent + '%';
+            document.getElementById('disk-detail').textContent = formatBytes(s.disk_used) + ' / ' + formatBytes(s.disk_total);
+            document.getElementById('uptime').textContent = formatUptime(s.uptime_seconds);
+            document.getElementById('hostname').textContent = s.hostname + ' (' + s.platform + ')';
+            document.getElementById('net-sent').textContent = formatBytes(s.net_sent);
+            document.getElementById('net-recv').textContent = formatBytes(s.net_recv);
+        } catch (e) { console.error(e); }
+    }
+
+    async function loadProxiesSummary() {
+        try {
+            const proxies = await api('/api/proxies');
+            const el = document.getElementById('proxies-summary');
+            if (proxies.length === 0) {
+                el.innerHTML = '<p style="color:var(--text-secondary)">No proxies configured. <a href="/panel/proxies" style="color:var(--accent)">Create one</a></p>';
+                return;
+            }
+            let html = '<table><thead><tr><th>Name</th><th>Port</th><th>Status</th><th>Clients</th><th>Traffic</th></tr></thead><tbody>';
+            for (const p of proxies) {
+                const badge = p.status.running
+                    ? '<span class="badge badge-success">Running</span>'
+                    : '<span class="badge badge-danger">Stopped</span>';
+                html += `<tr><td class="font-medium">${p.name}</td><td>${p.port}</td><td>${badge}</td><td>${p.client_count}</td><td>${formatBytes(p.traffic_up + p.traffic_down)}</td></tr>`;
+            }
+            html += '</tbody></table>';
+            el.innerHTML = html;
+        } catch (e) { console.error(e); }
+    }
+
+    loadStatus(); loadProxiesSummary();
+    setInterval(loadStatus, 5000);
+    setInterval(loadProxiesSummary, 10000);
+    </script>
+</body>
+</html>
+{{end}}

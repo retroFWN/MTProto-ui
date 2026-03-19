@@ -1,0 +1,23 @@
+# Binary
+mtproxy-panel
+mtproxy-panel.exe
+
+# Data (secrets, database)
+data/
+
+# Go
+go.sum
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude
+.claude/

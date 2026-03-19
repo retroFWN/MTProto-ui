@@ -1,0 +1,201 @@
+{{define "proxies.html"}}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proxies — MTProxy Panel</title>
+    <link href="/static/css/style.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div id="toast" class="toast"></div>
+
+    <div class="sidebar">
+        <div class="sidebar-brand"><i class="fas fa-paper-plane"></i><div><div class="name">MTProxy Panel</div><div class="ver">v1.0.0</div></div></div>
+        <nav>
+            <a href="/panel"><i class="fas fa-chart-line"></i> Dashboard</a>
+            <a href="/panel/proxies" class="active"><i class="fas fa-server"></i> Proxies</a>
+            <a href="/panel/settings"><i class="fas fa-cog"></i> Settings</a>
+        </nav>
+        <div class="sidebar-footer"><a href="#" onclick="logout()"><i class="fas fa-sign-out-alt mr-2"></i>Logout</a></div>
+    </div>
+
+    <div class="main">
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h1 class="page-title">Proxies</h1>
+                <p class="page-sub" style="margin-bottom:0">Manage MTProto proxy instances and clients</p>
+            </div>
+            <button class="btn btn-primary" onclick="showCreateModal()"><i class="fas fa-plus mr-1"></i> New Proxy</button>
+        </div>
+        <div id="proxies-list"><p style="color:var(--text-secondary)">Loading...</p></div>
+    </div>
+
+    <!-- Create Proxy Modal -->
+    <div id="createModal" class="modal-overlay">
+        <div class="modal">
+            <h3>New Proxy</h3>
+            <div class="mb-3"><label>Name</label><input type="text" id="proxyName" placeholder="My Proxy"></div>
+            <div class="mb-3"><label>Port</label><input type="number" id="proxyPort" value="443"></div>
+            <div class="mb-3"><label>Fake TLS Domain</label><input type="text" id="proxyDomain" value="google.com"></div>
+            <div class="mb-4"><label>Traffic Limit (bytes, 0 = unlimited)</label><input type="number" id="proxyTrafficLimit" value="0"></div>
+            <div class="flex justify-between gap-2" style="justify-content:flex-end">
+                <button class="btn btn-outline" onclick="hideModal('createModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="createProxy()">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Client Modal -->
+    <div id="addClientModal" class="modal-overlay">
+        <div class="modal">
+            <h3>Add Client</h3>
+            <input type="hidden" id="clientProxyId">
+            <div class="mb-3"><label>Client Name</label><input type="text" id="clientName" placeholder="User 1"></div>
+            <div class="mb-3"><label>Traffic Limit (bytes, 0 = unlimited)</label><input type="number" id="clientTrafficLimit" value="0"></div>
+            <div class="mb-4"><label>Expiry (Unix timestamp, 0 = never)</label><input type="number" id="clientExpiry" value="0"></div>
+            <div class="flex gap-2" style="justify-content:flex-end">
+                <button class="btn btn-outline" onclick="hideModal('addClientModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="addClient()">Add</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logs Modal -->
+    <div id="logsModal" class="modal-overlay">
+        <div class="modal" style="max-width:700px">
+            <div class="flex items-center justify-between mb-4">
+                <h3 style="margin:0">Container Logs</h3>
+                <button class="btn btn-outline btn-sm" onclick="hideModal('logsModal')">Close</button>
+            </div>
+            <pre id="logsContent"></pre>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+    <script>
+    async function loadProxies() {
+        try {
+            const proxies = await api('/api/proxies');
+            const el = document.getElementById('proxies-list');
+            if (proxies.length === 0) {
+                el.innerHTML = `<div class="card text-center py-12">
+                    <i class="fas fa-server text-4xl mb-4" style="color:var(--text-secondary)"></i>
+                    <p class="text-lg mb-2">No proxies yet</p>
+                    <p style="color:var(--text-secondary)" class="mb-4">Create your first MTProto proxy instance</p>
+                    <button class="btn btn-primary" onclick="showCreateModal()"><i class="fas fa-plus mr-1"></i> Create Proxy</button>
+                </div>`;
+                return;
+            }
+            let html = '';
+            for (const p of proxies) {
+                const running = p.status.running;
+                const badge = running ? '<span class="badge badge-success">Running</span>' : '<span class="badge badge-danger">Stopped</span>';
+                const controls = running
+                    ? `<button class="btn btn-outline btn-sm" onclick="proxyAction(${p.id},'restart')"><i class="fas fa-redo"></i></button>
+                       <button class="btn btn-danger btn-sm" onclick="proxyAction(${p.id},'stop')"><i class="fas fa-stop"></i></button>`
+                    : `<button class="btn btn-success btn-sm" onclick="proxyAction(${p.id},'start')"><i class="fas fa-play"></i></button>`;
+                html += `<div class="card">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <i class="fas fa-server text-xl" style="color:${running?'var(--success)':'var(--danger)'}"></i>
+                            <div>
+                                <h3 class="font-bold text-lg">${p.name}</h3>
+                                <span class="text-sm" style="color:var(--text-secondary)">Port: ${p.port} | Domain: ${p.fake_tls_domain} | ${badge}</span>
+                            </div>
+                        </div>
+                        <div class="flex gap-2">
+                            ${controls}
+                            <button class="btn btn-outline btn-sm" onclick="showLogs(${p.id})"><i class="fas fa-file-alt"></i></button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteProxy(${p.id})"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </div>
+                    <div class="grid grid-3 section-divider">
+                        <div><div class="stat-label">Upload</div><div class="font-bold">${formatBytes(p.traffic_up)}</div></div>
+                        <div><div class="stat-label">Download</div><div class="font-bold">${formatBytes(p.traffic_down)}</div></div>
+                        <div><div class="stat-label">Limit</div><div class="font-bold">${p.traffic_total_limit > 0 ? formatBytes(p.traffic_total_limit) : 'Unlimited'}</div></div>
+                    </div>
+                    <div class="section-divider">
+                        <div class="flex items-center justify-between mb-3">
+                            <h4 class="font-bold">Clients (${p.client_count})</h4>
+                            <button class="btn btn-outline btn-sm" onclick="showAddClientModal(${p.id})"><i class="fas fa-plus mr-1"></i>Add Client</button>
+                        </div>
+                        <div id="clients-${p.id}"><p class="text-sm" style="color:var(--text-secondary)">Loading...</p></div>
+                    </div>
+                </div>`;
+            }
+            el.innerHTML = html;
+            for (const p of proxies) loadClients(p.id);
+        } catch (e) { console.error(e); }
+    }
+
+    async function loadClients(proxyId) {
+        try {
+            const clients = await api(`/api/proxies/${proxyId}/clients`);
+            const el = document.getElementById(`clients-${proxyId}`);
+            if (clients.length === 0) { el.innerHTML = '<p class="text-sm" style="color:var(--text-secondary)">No clients</p>'; return; }
+            let html = '<table><thead><tr><th>Name</th><th>Secret</th><th>Status</th><th>Traffic</th><th>Link</th><th>Actions</th></tr></thead><tbody>';
+            for (const c of clients) {
+                const badge = c.enabled ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-danger">Disabled</span>';
+                const traffic = formatBytes(c.traffic_up + c.traffic_down) + (c.traffic_limit > 0 ? ' / ' + formatBytes(c.traffic_limit) : '');
+                html += `<tr>
+                    <td class="font-medium">${c.name}</td>
+                    <td><code onclick="copyToClipboard('${c.secret}')" title="Click to copy">${c.secret.substring(0,16)}...</code></td>
+                    <td>${badge}</td>
+                    <td>${traffic}</td>
+                    <td><button class="btn btn-outline btn-sm" onclick="copyToClipboard('${c.tg_link}')" title="Copy tg:// link"><i class="fas fa-link"></i></button></td>
+                    <td><div class="flex gap-2">
+                        <button class="btn btn-outline btn-sm" onclick="toggleClient(${proxyId},${c.id},${!c.enabled})"><i class="fas fa-${c.enabled?'pause':'play'}"></i></button>
+                        <button class="btn btn-outline btn-sm" onclick="resetTraffic(${proxyId},${c.id})"><i class="fas fa-undo"></i></button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteClient(${proxyId},${c.id})"><i class="fas fa-trash"></i></button>
+                    </div></td>
+                </tr>`;
+            }
+            html += '</tbody></table>';
+            el.innerHTML = html;
+        } catch (e) { console.error(e); }
+    }
+
+    function showCreateModal() { document.getElementById('createModal').classList.add('active'); }
+    function showAddClientModal(id) { document.getElementById('clientProxyId').value = id; document.getElementById('addClientModal').classList.add('active'); }
+    function hideModal(id) { document.getElementById(id).classList.remove('active'); }
+
+    async function createProxy() {
+        try {
+            await api('/api/proxies', { method: 'POST', body: JSON.stringify({
+                name: document.getElementById('proxyName').value,
+                port: parseInt(document.getElementById('proxyPort').value),
+                fake_tls_domain: document.getElementById('proxyDomain').value,
+                traffic_total_limit: parseInt(document.getElementById('proxyTrafficLimit').value),
+            })});
+            hideModal('createModal'); toast('Proxy created'); loadProxies();
+        } catch (e) { toast(e.message, 'error'); }
+    }
+
+    async function deleteProxy(id) { if (!confirm('Delete this proxy and all its clients?')) return; try { await api(`/api/proxies/${id}`, { method: 'DELETE' }); toast('Proxy deleted'); loadProxies(); } catch (e) { toast(e.message, 'error'); } }
+    async function proxyAction(id, action) { try { await api(`/api/proxies/${id}/${action}`, { method: 'POST' }); toast(`Proxy ${action}ed`); loadProxies(); } catch (e) { toast(e.message, 'error'); } }
+    async function showLogs(id) { try { const d = await api(`/api/proxies/${id}/logs?tail=100`); document.getElementById('logsContent').textContent = d.logs || 'No logs'; document.getElementById('logsModal').classList.add('active'); } catch (e) { toast(e.message, 'error'); } }
+
+    async function addClient() {
+        const proxyId = document.getElementById('clientProxyId').value;
+        try {
+            const r = await api(`/api/proxies/${proxyId}/clients`, { method: 'POST', body: JSON.stringify({
+                name: document.getElementById('clientName').value,
+                traffic_limit: parseInt(document.getElementById('clientTrafficLimit').value),
+                expiry_time: parseInt(document.getElementById('clientExpiry').value),
+            })});
+            hideModal('addClientModal'); toast('Client added'); loadProxies();
+        } catch (e) { toast(e.message, 'error'); }
+    }
+
+    async function toggleClient(pid, cid, enable) { try { await api(`/api/proxies/${pid}/clients/${cid}`, { method: 'PUT', body: JSON.stringify({ enabled: enable }) }); toast(enable ? 'Enabled' : 'Disabled'); loadClients(pid); } catch (e) { toast(e.message, 'error'); } }
+    async function resetTraffic(pid, cid) { try { await api(`/api/proxies/${pid}/clients/${cid}/reset-traffic`, { method: 'POST' }); toast('Traffic reset'); loadClients(pid); } catch (e) { toast(e.message, 'error'); } }
+    async function deleteClient(pid, cid) { if (!confirm('Delete this client?')) return; try { await api(`/api/proxies/${pid}/clients/${cid}`, { method: 'DELETE' }); toast('Deleted'); loadClients(pid); } catch (e) { toast(e.message, 'error'); } }
+
+    loadProxies();
+    setInterval(loadProxies, 15000);
+    </script>
+</body>
+</html>
+{{end}}

@@ -1,0 +1,554 @@
+package web
+
+import (
+	"fmt"
+	"net/http"
+	"runtime"
+	"strconv"
+	"time"
+
+	"mtproxy-panel/auth"
+	"mtproxy-panel/config"
+	"mtproxy-panel/database"
+	"mtproxy-panel/proxy"
+
+	"github.com/gin-gonic/gin"
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/disk"
+	"github.com/shirou/gopsutil/v4/host"
+	"github.com/shirou/gopsutil/v4/mem"
+	"github.com/shirou/gopsutil/v4/net"
+)
+
+// ── Pages ────────────────────────────────────────────────────────────────
+
+func LoginPage(c *gin.Context) {
+	c.HTML(http.StatusOK, "login.html", nil)
+}
+
+func DashboardPage(c *gin.Context) {
+	c.HTML(http.StatusOK, "dashboard.html", nil)
+}
+
+func ProxiesPage(c *gin.Context) {
+	c.HTML(http.StatusOK, "proxies.html", nil)
+}
+
+func SettingsPage(c *gin.Context) {
+	c.HTML(http.StatusOK, "settings.html", nil)
+}
+
+// ── Auth ─────────────────────────────────────────────────────────────────
+
+func Login(cfg *config.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req struct {
+			Username string `json:"username" binding:"required"`
+			Password string `json:"password" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"detail": "Invalid request"})
+			return
+		}
+
+		var user database.User
+		if database.DB.Where("username = ?", req.Username).First(&user).Error != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"detail": "Invalid credentials"})
+			return
+		}
+		if !auth.CheckPassword(req.Password, user.PasswordHash) {
+			c.JSON(http.StatusUnauthorized, gin.H{"detail": "Invalid credentials"})
+			return
+		}
+
+		token, err := auth.CreateToken(user.Username, cfg.TokenExpiry)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"detail": "Token creation failed"})
+			return
+		}
+
+		c.SetCookie("access_token", token, 3600*6, "/", "", false, true)
+		c.JSON(http.StatusOK, gin.H{"success": true, "token": token})
+	}
+}
+
+func Logout(c *gin.Context) {
+	c.SetCookie("access_token", "", -1, "/", "", false, true)
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+func ChangePassword(c *gin.Context) {
+	var req struct {
+		OldPassword string `json:"old_password" binding:"required"`
+		NewPassword string `json:"new_password" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": "Invalid request"})
+		return
+	}
+
+	user := currentUser(c)
+	if !auth.CheckPassword(req.OldPassword, user.PasswordHash) {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": "Wrong current password"})
+		return
+	}
+
+	hash, _ := auth.HashPassword(req.NewPassword)
+	database.DB.Model(user).Update("password_hash", hash)
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// ── System ───────────────────────────────────────────────────────────────
+
+func SystemStatus(c *gin.Context) {
+	cpuPercent, _ := cpu.Percent(500*time.Millisecond, false)
+	cpuCount, _ := cpu.Counts(true)
+	memInfo, _ := mem.VirtualMemory()
+
+	diskPath := "/"
+	if runtime.GOOS == "windows" {
+		diskPath = "C:\\"
+	}
+	diskInfo, _ := disk.Usage(diskPath)
+	netInfo, _ := net.IOCounters(false)
+	hostInfo, _ := host.Info()
+
+	cpuPct := 0.0
+	if len(cpuPercent) > 0 {
+		cpuPct = cpuPercent[0]
+	}
+
+	var netSent, netRecv uint64
+	if len(netInfo) > 0 {
+		netSent = netInfo[0].BytesSent
+		netRecv = netInfo[0].BytesRecv
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"cpu_percent":    cpuPct,
+		"cpu_count":      cpuCount,
+		"memory_total":   memInfo.Total,
+		"memory_used":    memInfo.Used,
+		"memory_percent": memInfo.UsedPercent,
+		"disk_total":     diskInfo.Total,
+		"disk_used":      diskInfo.Used,
+		"disk_percent":   diskInfo.UsedPercent,
+		"net_sent":       netSent,
+		"net_recv":       netRecv,
+		"uptime_seconds": hostInfo.Uptime,
+		"platform":       runtime.GOOS,
+		"hostname":       hostInfo.Hostname,
+	})
+}
+
+// ── Proxies ──────────────────────────────────────────────────────────────
+
+func ListProxies(c *gin.Context) {
+	var proxies []database.Proxy
+	database.DB.Find(&proxies)
+
+	result := make([]gin.H, 0, len(proxies))
+	for _, p := range proxies {
+		var clientCount int64
+		database.DB.Model(&database.Client{}).Where("proxy_id = ?", p.ID).Count(&clientCount)
+		status := proxy.GetContainerStatus(p.ID)
+
+		result = append(result, gin.H{
+			"id":                 p.ID,
+			"name":               p.Name,
+			"port":               p.Port,
+			"fake_tls_domain":    p.FakeTLSDomain,
+			"enabled":            p.Enabled,
+			"container_id":       p.ContainerID,
+			"traffic_up":         p.TrafficUp,
+			"traffic_down":       p.TrafficDown,
+			"traffic_total_limit": p.TrafficLimit,
+			"created_at":         p.CreatedAt,
+			"status":             status,
+			"client_count":       clientCount,
+		})
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+func CreateProxy(c *gin.Context) {
+	var req struct {
+		Name           string `json:"name" binding:"required"`
+		Port           int    `json:"port" binding:"required"`
+		FakeTLSDomain  string `json:"fake_tls_domain"`
+		TrafficLimit   int64  `json:"traffic_total_limit"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": err.Error()})
+		return
+	}
+	if req.FakeTLSDomain == "" {
+		req.FakeTLSDomain = "google.com"
+	}
+
+	// Check port uniqueness
+	var count int64
+	database.DB.Model(&database.Proxy{}).Where("port = ?", req.Port).Count(&count)
+	if count > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": fmt.Sprintf("Port %d already in use", req.Port)})
+		return
+	}
+
+	p := database.Proxy{
+		Name:          req.Name,
+		Port:          req.Port,
+		FakeTLSDomain: req.FakeTLSDomain,
+		TrafficLimit:  req.TrafficLimit,
+		Enabled:       true,
+	}
+	database.DB.Create(&p)
+
+	secret := proxy.GenerateSecret(req.FakeTLSDomain)
+	client := database.Client{
+		ProxyID: p.ID,
+		Name:    "default",
+		Secret:  secret,
+		Enabled: true,
+	}
+	database.DB.Create(&client)
+
+	secrets := database.GetEnabledSecrets(p.ID)
+	containerID, err := proxy.StartProxy(p.ID, p.Port, secrets)
+	if err == nil {
+		database.DB.Model(&p).Update("container_id", containerID)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "id": p.ID, "secret": secret})
+}
+
+func UpdateProxy(c *gin.Context) {
+	id := parseID(c, "id")
+	var p database.Proxy
+	if database.DB.First(&p, id).Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"detail": "Proxy not found"})
+		return
+	}
+
+	var req struct {
+		Name          *string `json:"name"`
+		Port          *int    `json:"port"`
+		FakeTLSDomain *string `json:"fake_tls_domain"`
+		Enabled       *bool   `json:"enabled"`
+		TrafficLimit  *int64  `json:"traffic_total_limit"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": err.Error()})
+		return
+	}
+
+	needRestart := false
+	if req.Name != nil {
+		p.Name = *req.Name
+	}
+	if req.Port != nil && *req.Port != p.Port {
+		p.Port = *req.Port
+		needRestart = true
+	}
+	if req.FakeTLSDomain != nil && *req.FakeTLSDomain != p.FakeTLSDomain {
+		p.FakeTLSDomain = *req.FakeTLSDomain
+		needRestart = true
+	}
+	if req.Enabled != nil {
+		p.Enabled = *req.Enabled
+		needRestart = true
+	}
+	if req.TrafficLimit != nil {
+		p.TrafficLimit = *req.TrafficLimit
+	}
+	database.DB.Save(&p)
+
+	if needRestart {
+		if p.Enabled {
+			secrets := database.GetEnabledSecrets(p.ID)
+			if len(secrets) > 0 {
+				cid, _ := proxy.RestartProxy(p.ID, p.Port, secrets)
+				database.DB.Model(&p).Update("container_id", cid)
+			}
+		} else {
+			proxy.StopProxy(p.ID)
+			database.DB.Model(&p).Update("container_id", "")
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+func DeleteProxy(c *gin.Context) {
+	id := parseID(c, "id")
+	var p database.Proxy
+	if database.DB.First(&p, id).Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"detail": "Proxy not found"})
+		return
+	}
+
+	proxy.StopProxy(p.ID)
+	database.DB.Where("proxy_id = ?", p.ID).Delete(&database.Client{})
+	database.DB.Delete(&p)
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+func StartProxyHandler(c *gin.Context) {
+	id := parseID(c, "id")
+	var p database.Proxy
+	if database.DB.First(&p, id).Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"detail": "Proxy not found"})
+		return
+	}
+
+	secrets := database.GetEnabledSecrets(p.ID)
+	if len(secrets) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": "No enabled client secrets"})
+		return
+	}
+
+	cid, err := proxy.StartProxy(p.ID, p.Port, secrets)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"detail": err.Error()})
+		return
+	}
+	database.DB.Model(&p).Updates(map[string]interface{}{"container_id": cid, "enabled": true})
+	c.JSON(http.StatusOK, gin.H{"success": true, "container_id": cid})
+}
+
+func StopProxyHandler(c *gin.Context) {
+	id := parseID(c, "id")
+	var p database.Proxy
+	if database.DB.First(&p, id).Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"detail": "Proxy not found"})
+		return
+	}
+
+	proxy.StopProxy(p.ID)
+	database.DB.Model(&p).Updates(map[string]interface{}{"container_id": "", "enabled": false})
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+func RestartProxyHandler(c *gin.Context) {
+	id := parseID(c, "id")
+	var p database.Proxy
+	if database.DB.First(&p, id).Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"detail": "Proxy not found"})
+		return
+	}
+
+	secrets := database.GetEnabledSecrets(p.ID)
+	if len(secrets) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": "No enabled client secrets"})
+		return
+	}
+
+	cid, err := proxy.RestartProxy(p.ID, p.Port, secrets)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"detail": err.Error()})
+		return
+	}
+	database.DB.Model(&p).Update("container_id", cid)
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+func ProxyStatsHandler(c *gin.Context) {
+	id := parseID(c, "id")
+	var p database.Proxy
+	if database.DB.First(&p, id).Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"detail": "Proxy not found"})
+		return
+	}
+	c.JSON(http.StatusOK, proxy.GetContainerStats(p.ID))
+}
+
+func ProxyLogsHandler(c *gin.Context) {
+	id := parseID(c, "id")
+	tail, _ := strconv.Atoi(c.DefaultQuery("tail", "50"))
+	var p database.Proxy
+	if database.DB.First(&p, id).Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"detail": "Proxy not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"logs": proxy.GetContainerLogs(p.ID, tail)})
+}
+
+// ── Clients ──────────────────────────────────────────────────────────────
+
+func ListClients(c *gin.Context) {
+	proxyID := parseID(c, "id")
+	var p database.Proxy
+	if database.DB.First(&p, proxyID).Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"detail": "Proxy not found"})
+		return
+	}
+
+	serverIP := database.GetServerIP()
+	var clients []database.Client
+	database.DB.Where("proxy_id = ?", proxyID).Find(&clients)
+
+	result := make([]gin.H, 0, len(clients))
+	for _, cl := range clients {
+		result = append(result, gin.H{
+			"id":            cl.ID,
+			"name":          cl.Name,
+			"secret":        cl.Secret,
+			"enabled":       cl.Enabled,
+			"traffic_up":    cl.TrafficUp,
+			"traffic_down":  cl.TrafficDown,
+			"traffic_limit": cl.TrafficLimit,
+			"expiry_time":   cl.ExpiryTime,
+			"last_online":   cl.LastOnline,
+			"created_at":    cl.CreatedAt,
+			"tg_link":       fmt.Sprintf("tg://proxy?server=%s&port=%d&secret=%s", serverIP, p.Port, cl.Secret),
+		})
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+func CreateClient(c *gin.Context) {
+	proxyID := parseID(c, "id")
+	var p database.Proxy
+	if database.DB.First(&p, proxyID).Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"detail": "Proxy not found"})
+		return
+	}
+
+	var req struct {
+		Name         string `json:"name" binding:"required"`
+		TrafficLimit int64  `json:"traffic_limit"`
+		ExpiryTime   int64  `json:"expiry_time"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": err.Error()})
+		return
+	}
+
+	secret := proxy.GenerateSecret(p.FakeTLSDomain)
+	cl := database.Client{
+		ProxyID:      p.ID,
+		Name:         req.Name,
+		Secret:       secret,
+		Enabled:      true,
+		TrafficLimit: req.TrafficLimit,
+		ExpiryTime:   req.ExpiryTime,
+	}
+	database.DB.Create(&cl)
+
+	serverIP := database.GetServerIP()
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"id":      cl.ID,
+		"secret":  secret,
+		"tg_link": fmt.Sprintf("tg://proxy?server=%s&port=%d&secret=%s", serverIP, p.Port, secret),
+	})
+}
+
+func UpdateClient(c *gin.Context) {
+	proxyID := parseID(c, "id")
+	clientID := parseID(c, "cid")
+
+	var cl database.Client
+	if database.DB.Where("id = ? AND proxy_id = ?", clientID, proxyID).First(&cl).Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"detail": "Client not found"})
+		return
+	}
+
+	var req struct {
+		Name         *string `json:"name"`
+		Enabled      *bool   `json:"enabled"`
+		TrafficLimit *int64  `json:"traffic_limit"`
+		ExpiryTime   *int64  `json:"expiry_time"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": err.Error()})
+		return
+	}
+
+	updates := map[string]interface{}{}
+	if req.Name != nil {
+		updates["name"] = *req.Name
+	}
+	if req.Enabled != nil {
+		updates["enabled"] = *req.Enabled
+	}
+	if req.TrafficLimit != nil {
+		updates["traffic_limit"] = *req.TrafficLimit
+	}
+	if req.ExpiryTime != nil {
+		updates["expiry_time"] = *req.ExpiryTime
+	}
+	database.DB.Model(&cl).Updates(updates)
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+func DeleteClient(c *gin.Context) {
+	proxyID := parseID(c, "id")
+	clientID := parseID(c, "cid")
+
+	result := database.DB.Where("id = ? AND proxy_id = ?", clientID, proxyID).Delete(&database.Client{})
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"detail": "Client not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+func ResetClientTraffic(c *gin.Context) {
+	proxyID := parseID(c, "id")
+	clientID := parseID(c, "cid")
+
+	result := database.DB.Model(&database.Client{}).
+		Where("id = ? AND proxy_id = ?", clientID, proxyID).
+		Updates(map[string]interface{}{"traffic_up": 0, "traffic_down": 0})
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"detail": "Client not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// ── Settings ─────────────────────────────────────────────────────────────
+
+func GetSettings(c *gin.Context) {
+	var settings []database.Setting
+	database.DB.Find(&settings)
+
+	result := make(map[string]string, len(settings))
+	for _, s := range settings {
+		result[s.Key] = s.Value
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+func UpdateSettings(c *gin.Context) {
+	var data map[string]string
+	if err := c.ShouldBindJSON(&data); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": err.Error()})
+		return
+	}
+
+	for key, value := range data {
+		var s database.Setting
+		if database.DB.Where("`key` = ?", key).First(&s).Error != nil {
+			database.DB.Create(&database.Setting{Key: key, Value: value})
+		} else {
+			database.DB.Model(&s).Update("value", value)
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+func PullImageHandler(c *gin.Context) {
+	if err := proxy.PullImage(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"detail": "Failed to pull image"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Image pulled successfully"})
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────
+
+func parseID(c *gin.Context, param string) uint {
+	id, _ := strconv.ParseUint(c.Param(param), 10, 32)
+	return uint(id)
+}

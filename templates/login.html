@@ -1,0 +1,59 @@
+{{define "login.html"}}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login — MTProxy Panel</title>
+    <link href="/static/css/style.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div id="toast" class="toast"></div>
+    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;">
+        <div class="card" style="width:400px;">
+            <div class="text-center mb-6">
+                <i class="fas fa-paper-plane text-4xl mb-4" style="color:var(--accent);"></i>
+                <h1 class="text-2xl font-bold">MTProxy Panel</h1>
+                <p class="text-sm" style="color:var(--text-secondary);margin-top:4px;">MTProto Proxy Management</p>
+            </div>
+            <form id="loginForm" onsubmit="handleLogin(event)">
+                <div class="mb-4">
+                    <label>Username</label>
+                    <input type="text" id="username" placeholder="admin" required autofocus>
+                </div>
+                <div class="mb-4">
+                    <label>Password</label>
+                    <input type="password" id="password" placeholder="password" required>
+                </div>
+                <div id="loginError" class="mb-4 text-sm" style="color:var(--danger);display:none;"></div>
+                <button type="submit" class="btn btn-primary w-full" style="padding:12px;justify-content:center;">
+                    <i class="fas fa-sign-in-alt mr-2"></i> Login
+                </button>
+            </form>
+        </div>
+    </div>
+    <script src="/static/js/app.js"></script>
+    <script>
+    async function handleLogin(e) {
+        e.preventDefault();
+        const errEl = document.getElementById('loginError');
+        errEl.style.display = 'none';
+        try {
+            await api('/api/login', {
+                method: 'POST',
+                body: JSON.stringify({
+                    username: document.getElementById('username').value,
+                    password: document.getElementById('password').value,
+                }),
+            });
+            window.location.href = '/panel';
+        } catch (err) {
+            errEl.textContent = err.message;
+            errEl.style.display = 'block';
+        }
+    }
+    </script>
+</body>
+</html>
+{{end}}
