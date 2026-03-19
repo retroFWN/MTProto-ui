@@ -41,7 +41,7 @@
     <div id="toast" class="toast"></div>
 
     <div class="sidebar">
-        <div class="sidebar-brand"><i class="fas fa-paper-plane"></i><div><div class="name">MTProxy Panel</div><div class="ver">v1.1.0</div></div></div>
+        <div class="sidebar-brand"><i class="fas fa-paper-plane"></i><div><div class="name">MTProxy Panel</div><div class="ver">v1.2.0</div></div></div>
         <nav>
             <a href="/panel"><i class="fas fa-chart-line"></i> Dashboard</a>
             <a href="/panel/proxies"><i class="fas fa-server"></i> Proxies</a>
@@ -73,15 +73,44 @@
             <button class="btn btn-primary mt-4" onclick="changePassword()"><i class="fas fa-save mr-1"></i> Update Password</button>
         </div>
 
+        <!-- SSL / Domain -->
+        <div class="card mb-6">
+            <h3 class="font-bold text-lg mb-4"><i class="fas fa-shield-alt mr-2"></i>SSL Certificate</h3>
+            <p class="mb-3" style="color:var(--text-secondary);font-size:13px">
+                Specify your domain to automatically obtain a Let's Encrypt SSL certificate.
+                Requires ports 80 and 443 to be open. <strong>Restart required</strong> after changing.
+            </p>
+            <div class="grid grid-2">
+                <div><label>Panel Domain (e.g. panel.example.com)</label><input type="text" id="setting-panel_domain" placeholder="leave empty for HTTP"></div>
+            </div>
+            <button class="btn btn-primary mt-4" onclick="saveSettings()"><i class="fas fa-save mr-1"></i> Save & Restart Required</button>
+        </div>
+
         <!-- Panel Settings -->
         <div class="card mb-6">
             <h3 class="font-bold text-lg mb-4"><i class="fas fa-sliders-h mr-2"></i>Panel Settings</h3>
             <div class="grid grid-2">
                 <div><label>Server IP (for tg:// links)</label><input type="text" id="setting-server_ip" placeholder="auto-detect"></div>
-                <div><label>Telegram Bot Token (optional)</label><input type="text" id="setting-tg_bot_token" placeholder="123456:ABC-DEF..."></div>
-                <div><label>Telegram Chat ID (optional)</label><input type="text" id="setting-tg_chat_id" placeholder="123456789"></div>
             </div>
             <button class="btn btn-primary mt-4" onclick="saveSettings()"><i class="fas fa-save mr-1"></i> Save Settings</button>
+        </div>
+
+        <!-- Telegram Bot -->
+        <div class="card mb-6">
+            <h3 class="font-bold text-lg mb-4"><i class="fab fa-telegram mr-2"></i>Telegram Bot</h3>
+            <p class="mb-3" style="color:var(--text-secondary);font-size:13px">
+                Create a bot via <a href="https://t.me/BotFather" target="_blank" style="color:var(--accent)">@BotFather</a>,
+                paste the token below and specify admin Telegram IDs (comma-separated). The panel will launch the bot automatically.
+            </p>
+            <div class="grid grid-2">
+                <div><label>Bot Token (from @BotFather)</label><input type="text" id="setting-tg_bot_token" placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"></div>
+                <div><label>Admin Telegram IDs (comma-separated)</label><input type="text" id="setting-tg_admin_ids" placeholder="123456789,987654321"></div>
+            </div>
+            <div class="mt-4" style="display:flex;align-items:center;gap:12px;">
+                <button class="btn btn-primary" onclick="saveBotSettings()"><i class="fas fa-save mr-1"></i> Save</button>
+                <button class="btn btn-outline" id="botStartBtn" onclick="toggleBot()"><i class="fas fa-play mr-1"></i> Start Bot</button>
+                <span id="botStatus" style="font-size:13px;color:var(--text-secondary)"></span>
+            </div>
         </div>
 
         <!-- Docker -->
@@ -95,7 +124,7 @@
         <!-- About -->
         <div class="card">
             <h3 class="font-bold text-lg mb-2"><i class="fas fa-info-circle mr-2"></i>About</h3>
-            <p style="color:var(--text-secondary)">MTProxy Panel v1.1.0<br>MTProto Proxy management panel inspired by 3x-ui.<br>Built with Go + Gin + SQLite.</p>
+            <p style="color:var(--text-secondary)">MTProxy Panel v1.2.0<br>MTProto Proxy management panel inspired by 3x-ui.<br>Built with Go + Gin + SQLite.</p>
         </div>
     </div>
 
@@ -199,8 +228,59 @@
         try { await api('/api/pull-image', { method: 'POST' }); s.textContent = 'Done!'; toast('Image pulled'); } catch (e) { s.textContent = 'Failed'; toast(e.message, 'error'); }
     }
 
+    async function saveBotSettings() {
+        const data = {
+            tg_bot_token: document.getElementById('setting-tg_bot_token').value,
+            tg_admin_ids: document.getElementById('setting-tg_admin_ids').value,
+        };
+        try {
+            await api('/api/settings', { method: 'POST', body: JSON.stringify(data) });
+            toast('Bot settings saved');
+        } catch (e) { toast(e.message, 'error'); }
+    }
+
+    async function toggleBot() {
+        const status = document.getElementById('botStatus');
+        const btn = document.getElementById('botStartBtn');
+        try {
+            const res = await api('/api/bot/status');
+            if (res.running) {
+                await api('/api/bot/stop', { method: 'POST' });
+                toast('Bot stopped');
+            } else {
+                await api('/api/bot/start', { method: 'POST' });
+                toast('Bot started');
+            }
+            setTimeout(loadBotStatus, 500);
+        } catch (e) { toast(e.message, 'error'); }
+    }
+
+    async function loadBotStatus() {
+        const btn = document.getElementById('botStartBtn');
+        const status = document.getElementById('botStatus');
+        try {
+            const res = await api('/api/bot/status');
+            if (res.running) {
+                btn.innerHTML = '<i class="fas fa-stop mr-1"></i> Stop Bot';
+                btn.className = 'btn btn-outline';
+                btn.style.borderColor = 'var(--danger)';
+                btn.style.color = 'var(--danger)';
+                status.innerHTML = '<span style="color:var(--success)">Running</span>';
+            } else {
+                btn.innerHTML = '<i class="fas fa-play mr-1"></i> Start Bot';
+                btn.className = 'btn btn-outline';
+                btn.style.borderColor = '';
+                btn.style.color = '';
+                status.innerHTML = res.error ? `<span style="color:var(--danger)">${res.error}</span>` : 'Stopped';
+            }
+        } catch (e) {
+            status.textContent = 'Unknown';
+        }
+    }
+
     loadBackends();
     loadSettings();
+    loadBotStatus();
     </script>
 </body>
 </html>

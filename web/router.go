@@ -61,6 +61,22 @@ func NewRouter(cfg *config.Config) *gin.Engine {
 		api.POST("/pull-image", PullImageHandler)
 
 		api.GET("/backends", ListBackends)
+
+		api.GET("/bot/status", BotStatus)
+		api.POST("/bot/start", BotStart(cfg))
+		api.POST("/bot/stop", BotStop)
+	}
+
+	// Bot API — authenticated via X-Bot-Token header (= panel's secret key)
+	bot := r.Group("/bot/api")
+	bot.Use(BotAuth(cfg.SecretKey))
+	{
+		bot.GET("/proxies", ListProxies)
+		bot.GET("/proxies/:id/clients", ListClients)
+		bot.POST("/proxies/:id/clients", CreateClient)
+		bot.DELETE("/proxies/:id/clients/:cid", DeleteClient)
+		bot.POST("/proxies/:id/clients/:cid/reset-traffic", ResetClientTraffic)
+		bot.GET("/settings", GetSettings)
 	}
 
 	return r

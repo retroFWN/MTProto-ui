@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"mtproxy-panel/auth"
+	"mtproxy-panel/botmanager"
 	"mtproxy-panel/config"
 	"mtproxy-panel/database"
 	"mtproxy-panel/proxy"
@@ -620,6 +621,49 @@ func ListBackends(c *gin.Context) {
 		})
 	}
 	c.JSON(http.StatusOK, result)
+}
+
+// ── Bot Management ──────────────────────────────────────────────────────
+
+func BotStatus(c *gin.Context) {
+	running, lastErr := botmanager.Status()
+	c.JSON(http.StatusOK, gin.H{"running": running, "error": lastErr})
+}
+
+func BotStart(cfg *config.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var token, adminIDs string
+
+		var s database.Setting
+		if database.DB.Where("`key` = ?", "tg_bot_token").First(&s).Error == nil {
+			token = s.Value
+		}
+		if token == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"detail": "Bot token not configured"})
+			return
+		}
+
+		if database.DB.Where("`key` = ?", "tg_admin_ids").First(&s).Error == nil {
+			adminIDs = s.Value
+		}
+
+		panelURL := fmt.Sprintf("http://127.0.0.1:%d", cfg.Port)
+		botDir := "bot"
+
+		if err := botmanager.Start(botDir, token, adminIDs, panelURL, cfg.SecretKey); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"detail": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"success": true})
+	}
+}
+
+func BotStop(c *gin.Context) {
+	if err := botmanager.Stop(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"detail": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────

@@ -13,6 +13,7 @@ type Config struct {
 	Host           string
 	Port           int
 	DBPath         string
+	DataDir        string
 	SecretKey      string
 	DefaultUser    string
 	DefaultPass    string
@@ -20,6 +21,7 @@ type Config struct {
 	DefaultBackend string
 	ContainerPfx   string
 	StatsInterval  int // seconds
+	Domain         string // if set, enables auto-SSL via Let's Encrypt
 }
 
 func Load() *Config {
@@ -31,6 +33,7 @@ func Load() *Config {
 		Host:           envOr("PANEL_HOST", "0.0.0.0"),
 		Port:           envInt("PANEL_PORT", 8080),
 		DBPath:         filepath.Join(dataDir, "mtproxy.db"),
+		DataDir:        dataDir,
 		SecretKey:      loadOrCreateSecret(filepath.Join(dataDir, ".secret_key")),
 		DefaultUser:    "admin",
 		DefaultPass:    "admin",
@@ -38,6 +41,7 @@ func Load() *Config {
 		DefaultBackend: envOr("PROXY_BACKEND", "official"),
 		ContainerPfx:   "mtproxy-",
 		StatsInterval:  10,
+		Domain:         os.Getenv("PANEL_DOMAIN"),
 	}
 }
 

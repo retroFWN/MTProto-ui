@@ -8,6 +8,12 @@ data/
 # Go
 go.sum
 
+# Python
+__pycache__/
+*.pyc
+*.pyo
+bot/.venv/
+
 # IDE
 .idea/
 .vscode/

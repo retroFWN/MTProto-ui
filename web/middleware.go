@@ -70,6 +70,19 @@ func APIAuth() gin.HandlerFunc {
 	}
 }
 
+// BotAuth validates X-Bot-Token header against the panel's secret key.
+func BotAuth(secretKey string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		token := c.GetHeader("X-Bot-Token")
+		if token == "" || token != secretKey {
+			c.JSON(http.StatusUnauthorized, gin.H{"detail": "Invalid bot token"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
 func currentUser(c *gin.Context) *database.User {
 	u, _ := c.Get(userKey)
 	if user, ok := u.(*database.User); ok {
