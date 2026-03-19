@@ -212,6 +212,13 @@ func TrafficCollector(intervalSec int) {
 								"traffic_up":   u.TotalOctets - half,
 							})
 							totalOctets += u.TotalOctets
+							// Disable client if traffic limit exceeded
+							if cl.TrafficLimit > 0 && u.TotalOctets >= cl.TrafficLimit && cl.Enabled {
+								database.DB.Model(&cl).Update("enabled", false)
+								um.RemoveUser(p.Port, u.Username)
+								log.Printf("Client %s (proxy %d) disabled: traffic limit exceeded (%d/%d)",
+									cl.Name, p.ID, u.TotalOctets, cl.TrafficLimit)
+							}
 							break
 						}
 					}

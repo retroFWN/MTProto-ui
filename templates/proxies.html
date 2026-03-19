@@ -7,12 +7,32 @@
     <title>Proxies — MTProxy Panel</title>
     <link href="/static/css/style.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <style>
+        .engine-toggle { display: flex; gap: 8px; margin-top: 6px; }
+        .engine-btn {
+            flex: 1; padding: 10px 12px; border: 2px solid var(--border); border-radius: 8px;
+            background: var(--bg-primary); cursor: pointer; text-align: center; transition: all .2s;
+        }
+        .engine-btn:hover { border-color: var(--accent); }
+        .engine-btn.active { border-color: var(--accent); background: rgba(59,130,246,.08); }
+        .engine-btn .engine-name { font-weight: 700; font-size: 14px; }
+        .engine-btn .engine-lang { font-size: 11px; opacity: .6; }
+        .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+        .live-dot.online { background: var(--success); box-shadow: 0 0 6px var(--success); }
+        .live-dot.offline { background: var(--text-secondary); opacity: .4; }
+        .live-badge {
+            display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px;
+            border-radius: 4px; font-size: 11px; font-weight: 600;
+            background: rgba(16,185,129,.1); color: var(--success);
+        }
+        .ip-list { font-size: 11px; color: var(--text-secondary); max-width: 150px; word-break: break-all; }
+    </style>
 </head>
 <body>
     <div id="toast" class="toast"></div>
 
     <div class="sidebar">
-        <div class="sidebar-brand"><i class="fas fa-paper-plane"></i><div><div class="name">MTProxy Panel</div><div class="ver">v1.1.0</div></div></div>
+        <div class="sidebar-brand"><i class="fas fa-paper-plane"></i><div><div class="name">MTProxy Panel</div><div class="ver">v1.2.0</div></div></div>
         <nav>
             <a href="/panel"><i class="fas fa-chart-line"></i> Dashboard</a>
             <a href="/panel/proxies" class="active"><i class="fas fa-server"></i> Proxies</a>
@@ -39,7 +59,20 @@
             <div class="mb-3"><label>Name</label><input type="text" id="proxyName" placeholder="My Proxy"></div>
             <div class="mb-3"><label>Port</label><input type="number" id="proxyPort" value="443"></div>
             <div class="mb-3"><label>Fake TLS Domain</label><input type="text" id="proxyDomain" value="google.com"></div>
-            <div class="mb-4"><label>Traffic Limit (bytes, 0 = unlimited)</label><input type="number" id="proxyTrafficLimit" value="0"></div>
+            <div class="mb-4">
+                <label>Proxy Engine</label>
+                <div class="engine-toggle">
+                    <div class="engine-btn active" data-engine="official" onclick="selectEngine(this)">
+                        <div class="engine-name">Official</div>
+                        <div class="engine-lang">C</div>
+                    </div>
+                    <div class="engine-btn" data-engine="telemt" onclick="selectEngine(this)">
+                        <div class="engine-name">telemt</div>
+                        <div class="engine-lang">Rust — per-user stats</div>
+                    </div>
+                </div>
+                <input type="hidden" id="proxyBackend" value="official">
+            </div>
             <div class="flex justify-between gap-2" style="justify-content:flex-end">
                 <button class="btn btn-outline" onclick="hideModal('createModal')">Cancel</button>
                 <button class="btn btn-primary" onclick="createProxy()">Create</button>
@@ -75,6 +108,15 @@
 
     <script src="/static/js/app.js"></script>
     <script>
+    let liveData = {}; // proxyId → live response
+    let proxyMeta = {}; // proxyId → {backend, running}
+
+    function selectEngine(el) {
+        el.parentElement.querySelectorAll('.engine-btn').forEach(b => b.classList.remove('active'));
+        el.classList.add('active');
+        document.getElementById('proxyBackend').value = el.dataset.engine;
+    }
+
     async function loadProxies() {
         try {
             const proxies = await api('/api/proxies');
@@ -92,17 +134,34 @@
             for (const p of proxies) {
                 const running = p.status.running;
                 const badge = running ? '<span class="badge badge-success">Running</span>' : '<span class="badge badge-danger">Stopped</span>';
+                const isTelemt = p.backend === 'telemt';
+                const engineBadge = isTelemt
+                    ? '<span style="color:#ef7744;font-weight:600">Rust</span>'
+                    : '<span style="color:var(--accent);font-weight:600">C</span>';
+
                 const controls = running
                     ? `<button class="btn btn-outline btn-sm" onclick="proxyAction(${p.id},'restart')"><i class="fas fa-redo"></i></button>
                        <button class="btn btn-danger btn-sm" onclick="proxyAction(${p.id},'stop')"><i class="fas fa-stop"></i></button>`
                     : `<button class="btn btn-success btn-sm" onclick="proxyAction(${p.id},'start')"><i class="fas fa-play"></i></button>`;
+
+                // Live summary for telemt
+                let liveSummaryHtml = '';
+                if (isTelemt && running && liveData[p.id] && liveData[p.id].supported && liveData[p.id].summary) {
+                    const s = liveData[p.id].summary;
+                    liveSummaryHtml = `
+                        <div><div class="stat-label">Connections</div><div class="font-bold">${s.current_connections || 0}</div></div>
+                        <div><div class="stat-label">Total Conns</div><div class="font-bold">${s.connections_total || 0}</div></div>
+                        <div><div class="stat-label">Uptime</div><div class="font-bold">${formatUptime(s.uptime_seconds || 0)}</div></div>`;
+                }
+
                 html += `<div class="card">
                     <div class="flex items-center justify-between mb-4">
                         <div class="flex items-center gap-3">
                             <i class="fas fa-server text-xl" style="color:${running?'var(--success)':'var(--danger)'}"></i>
                             <div>
                                 <h3 class="font-bold text-lg">${p.name}</h3>
-                                <span class="text-sm" style="color:var(--text-secondary)">Port: ${p.port} | Domain: ${p.fake_tls_domain} | ${p.backend === 'telemt' ? '<span style="color:#ef7744">Rust</span>' : '<span style="color:var(--accent)">C</span>'} | ${badge}</span>
+                                <span class="text-sm" style="color:var(--text-secondary)">Port: ${p.port} | ${p.fake_tls_domain} | ${engineBadge} | ${badge}</span>
+                                ${isTelemt && running ? ' <span class="live-badge"><i class="fas fa-chart-bar"></i> Live Stats</span>' : ''}
                             </div>
                         </div>
                         <div class="flex gap-2">
@@ -114,8 +173,9 @@
                     <div class="grid grid-3 section-divider">
                         <div><div class="stat-label">Upload</div><div class="font-bold">${formatBytes(p.traffic_up)}</div></div>
                         <div><div class="stat-label">Download</div><div class="font-bold">${formatBytes(p.traffic_down)}</div></div>
-                        <div><div class="stat-label">Limit</div><div class="font-bold">${p.traffic_total_limit > 0 ? formatBytes(p.traffic_total_limit) : 'Unlimited'}</div></div>
+                        <div><div class="stat-label">Total</div><div class="font-bold">${formatBytes(p.traffic_up + p.traffic_down)}</div></div>
                     </div>
+                    ${liveSummaryHtml ? `<div class="grid grid-3 section-divider">${liveSummaryHtml}</div>` : ''}
                     <div class="section-divider">
                         <div class="flex items-center justify-between mb-3">
                             <h4 class="font-bold">Clients (${p.client_count})</h4>
@@ -126,24 +186,59 @@
                 </div>`;
             }
             el.innerHTML = html;
-            for (const p of proxies) loadClients(p.id);
+            for (const p of proxies) {
+                proxyMeta[p.id] = { backend: p.backend, running: p.status.running };
+                loadClients(p.id, p.backend, p.status.running);
+            }
         } catch (e) { console.error(e); }
     }
 
-    async function loadClients(proxyId) {
+    async function loadClients(proxyId, backend, running) {
         try {
             const clients = await api(`/api/proxies/${proxyId}/clients`);
             const el = document.getElementById(`clients-${proxyId}`);
             if (clients.length === 0) { el.innerHTML = '<p class="text-sm" style="color:var(--text-secondary)">No clients</p>'; return; }
-            let html = '<table><thead><tr><th>Name</th><th>Secret</th><th>Status</th><th>Traffic</th><th>Link</th><th>Actions</th></tr></thead><tbody>';
+
+            const isTelemt = backend === 'telemt';
+            const live = (isTelemt && running && liveData[proxyId] && liveData[proxyId].users) ? liveData[proxyId].users : [];
+
+            // Build lookup: client_id → live data
+            const liveMap = {};
+            for (const u of live) { liveMap[u.client_id] = u; }
+
+            let extraHeaders = '';
+            if (isTelemt) {
+                extraHeaders = '<th>Online</th><th>Conns</th><th>IPs</th>';
+            }
+
+            let html = `<table><thead><tr><th>Name</th><th>Secret</th><th>Status</th><th>Traffic</th>${extraHeaders}<th>Link</th><th>Actions</th></tr></thead><tbody>`;
             for (const c of clients) {
                 const badge = c.enabled ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-danger">Disabled</span>';
                 const traffic = formatBytes(c.traffic_up + c.traffic_down) + (c.traffic_limit > 0 ? ' / ' + formatBytes(c.traffic_limit) : '');
+
+                let extraCols = '';
+                if (isTelemt) {
+                    const u = liveMap[c.id];
+                    if (u) {
+                        const onlineDot = u.current_connections > 0
+                            ? '<span class="live-dot online"></span>'
+                            : '<span class="live-dot offline"></span>';
+                        const ips = (u.active_ips || []).join(', ');
+                        extraCols = `
+                            <td>${onlineDot} ${u.current_connections > 0 ? 'Online' : 'Offline'}</td>
+                            <td class="font-bold">${u.current_connections}</td>
+                            <td class="ip-list">${u.active_unique_ips} ${ips ? '(' + ips + ')' : ''}</td>`;
+                    } else {
+                        extraCols = '<td><span class="live-dot offline"></span> —</td><td>—</td><td>—</td>';
+                    }
+                }
+
                 html += `<tr>
                     <td class="font-medium">${c.name}</td>
                     <td><code onclick="copyToClipboard('${c.secret}')" title="Click to copy">${c.secret.substring(0,16)}...</code></td>
                     <td>${badge}</td>
                     <td>${traffic}</td>
+                    ${extraCols}
                     <td><button class="btn btn-outline btn-sm" onclick="copyToClipboard('${c.tg_link}')" title="Copy tg:// link"><i class="fas fa-link"></i></button></td>
                     <td><div class="flex gap-2">
                         <button class="btn btn-outline btn-sm" onclick="toggleClient(${proxyId},${c.id},${!c.enabled})"><i class="fas fa-${c.enabled?'pause':'play'}"></i></button>
@@ -157,7 +252,28 @@
         } catch (e) { console.error(e); }
     }
 
-    function showCreateModal() { document.getElementById('createModal').classList.add('active'); }
+    // Fetch live stats for known telemt proxies
+    async function fetchLiveData() {
+        for (const [id, meta] of Object.entries(proxyMeta)) {
+            if (meta.backend === 'telemt' && meta.running) {
+                try {
+                    liveData[id] = await api(`/api/proxies/${id}/live`);
+                } catch (e) { /* telemt not ready yet */ }
+            }
+        }
+    }
+
+    function showCreateModal() {
+        // Load default backend from settings
+        api('/api/settings').then(s => {
+            const def = s.proxy_backend || 'official';
+            document.getElementById('proxyBackend').value = def;
+            document.querySelectorAll('.engine-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.engine === def);
+            });
+        }).catch(() => {});
+        document.getElementById('createModal').classList.add('active');
+    }
     function showAddClientModal(id) { document.getElementById('clientProxyId').value = id; document.getElementById('addClientModal').classList.add('active'); }
     function hideModal(id) { document.getElementById(id).classList.remove('active'); }
 
@@ -167,7 +283,7 @@
                 name: document.getElementById('proxyName').value,
                 port: parseInt(document.getElementById('proxyPort').value),
                 fake_tls_domain: document.getElementById('proxyDomain').value,
-                traffic_total_limit: parseInt(document.getElementById('proxyTrafficLimit').value),
+                backend: document.getElementById('proxyBackend').value,
             })});
             hideModal('createModal'); toast('Proxy created'); loadProxies();
         } catch (e) { toast(e.message, 'error'); }
@@ -180,7 +296,7 @@
     async function addClient() {
         const proxyId = document.getElementById('clientProxyId').value;
         try {
-            const r = await api(`/api/proxies/${proxyId}/clients`, { method: 'POST', body: JSON.stringify({
+            await api(`/api/proxies/${proxyId}/clients`, { method: 'POST', body: JSON.stringify({
                 name: document.getElementById('clientName').value,
                 traffic_limit: parseInt(document.getElementById('clientTrafficLimit').value),
                 expiry_time: parseInt(document.getElementById('clientExpiry').value),
@@ -189,12 +305,14 @@
         } catch (e) { toast(e.message, 'error'); }
     }
 
-    async function toggleClient(pid, cid, enable) { try { await api(`/api/proxies/${pid}/clients/${cid}`, { method: 'PUT', body: JSON.stringify({ enabled: enable }) }); toast(enable ? 'Enabled' : 'Disabled'); loadClients(pid); } catch (e) { toast(e.message, 'error'); } }
-    async function resetTraffic(pid, cid) { try { await api(`/api/proxies/${pid}/clients/${cid}/reset-traffic`, { method: 'POST' }); toast('Traffic reset'); loadClients(pid); } catch (e) { toast(e.message, 'error'); } }
-    async function deleteClient(pid, cid) { if (!confirm('Delete this client?')) return; try { await api(`/api/proxies/${pid}/clients/${cid}`, { method: 'DELETE' }); toast('Deleted'); loadClients(pid); } catch (e) { toast(e.message, 'error'); } }
+    async function toggleClient(pid, cid, enable) { try { await api(`/api/proxies/${pid}/clients/${cid}`, { method: 'PUT', body: JSON.stringify({ enabled: enable }) }); toast(enable ? 'Enabled' : 'Disabled'); const m = proxyMeta[pid]||{}; loadClients(pid, m.backend, m.running); } catch (e) { toast(e.message, 'error'); } }
+    async function resetTraffic(pid, cid) { try { await api(`/api/proxies/${pid}/clients/${cid}/reset-traffic`, { method: 'POST' }); toast('Traffic reset'); const m = proxyMeta[pid]||{}; loadClients(pid, m.backend, m.running); } catch (e) { toast(e.message, 'error'); } }
+    async function deleteClient(pid, cid) { if (!confirm('Delete this client?')) return; try { await api(`/api/proxies/${pid}/clients/${cid}`, { method: 'DELETE' }); toast('Deleted'); const m = proxyMeta[pid]||{}; loadClients(pid, m.backend, m.running); } catch (e) { toast(e.message, 'error'); } }
 
-    loadProxies();
-    setInterval(loadProxies, 15000);
+    // Initial load + refresh every 10s
+    async function refresh() { await loadProxies(); await fetchLiveData(); await loadProxies(); }
+    refresh();
+    setInterval(refresh, 10000);
     </script>
 </body>
 </html>
