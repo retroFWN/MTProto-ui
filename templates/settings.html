@@ -7,12 +7,41 @@
     <title>Settings — MTProxy Panel</title>
     <link href="/static/css/style.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <style>
+        .backend-cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+        @media (max-width: 768px) { .backend-cards { grid-template-columns: 1fr; } }
+        .backend-card {
+            background: var(--bg-primary); border: 2px solid var(--border);
+            border-radius: 12px; padding: 20px; cursor: pointer; transition: all .2s;
+            position: relative;
+        }
+        .backend-card:hover { border-color: var(--accent); }
+        .backend-card.active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(59,130,246,.2); }
+        .backend-card .check-mark {
+            position: absolute; top: 12px; right: 12px; width: 24px; height: 24px;
+            border-radius: 50%; background: var(--accent); color: white;
+            display: none; align-items: center; justify-content: center; font-size: 12px;
+        }
+        .backend-card.active .check-mark { display: flex; }
+        .backend-card h4 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+        .backend-lang { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-bottom: 8px; }
+        .lang-c { background: rgba(59,130,246,.15); color: var(--accent); }
+        .lang-rust { background: rgba(239,119,68,.15); color: #ef7744; }
+        .backend-desc { color: var(--text-secondary); font-size: 13px; margin-bottom: 12px; line-height: 1.5; }
+        .backend-image { font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; }
+        .backend-image code { font-size: 11px; }
+        .feature-list { list-style: none; padding: 0; margin: 0; }
+        .feature-list li { padding: 4px 0; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+        .feature-list .yes { color: var(--success); }
+        .feature-list .no { color: var(--text-secondary); opacity: 0.5; }
+        .feature-icon { width: 16px; text-align: center; }
+    </style>
 </head>
 <body>
     <div id="toast" class="toast"></div>
 
     <div class="sidebar">
-        <div class="sidebar-brand"><i class="fas fa-paper-plane"></i><div><div class="name">MTProxy Panel</div><div class="ver">v1.0.0</div></div></div>
+        <div class="sidebar-brand"><i class="fas fa-paper-plane"></i><div><div class="name">MTProxy Panel</div><div class="ver">v1.1.0</div></div></div>
         <nav>
             <a href="/panel"><i class="fas fa-chart-line"></i> Dashboard</a>
             <a href="/panel/proxies"><i class="fas fa-server"></i> Proxies</a>
@@ -25,6 +54,16 @@
         <h1 class="page-title">Settings</h1>
         <p class="page-sub">Panel configuration and account settings</p>
 
+        <!-- Backend Selection -->
+        <div class="card mb-6">
+            <h3 class="font-bold text-lg mb-2"><i class="fas fa-microchip mr-2"></i>Proxy Engine</h3>
+            <p class="mb-4" style="color:var(--text-secondary);font-size:13px">Choose which MTProto proxy engine to use for new proxies</p>
+            <div id="backendCards" class="backend-cards"></div>
+            <button class="btn btn-primary mt-4" onclick="saveBackend()"><i class="fas fa-save mr-1"></i> Apply Engine</button>
+            <span id="backendStatus" class="ml-3" style="color:var(--text-secondary);font-size:13px"></span>
+        </div>
+
+        <!-- Change Password -->
         <div class="card mb-6">
             <h3 class="font-bold text-lg mb-4"><i class="fas fa-lock mr-2"></i>Change Password</h3>
             <div class="grid grid-2">
@@ -34,6 +73,7 @@
             <button class="btn btn-primary mt-4" onclick="changePassword()"><i class="fas fa-save mr-1"></i> Update Password</button>
         </div>
 
+        <!-- Panel Settings -->
         <div class="card mb-6">
             <h3 class="font-bold text-lg mb-4"><i class="fas fa-sliders-h mr-2"></i>Panel Settings</h3>
             <div class="grid grid-2">
@@ -44,21 +84,85 @@
             <button class="btn btn-primary mt-4" onclick="saveSettings()"><i class="fas fa-save mr-1"></i> Save Settings</button>
         </div>
 
+        <!-- Docker -->
         <div class="card mb-6">
             <h3 class="font-bold text-lg mb-4"><i class="fab fa-docker mr-2"></i>Docker</h3>
-            <p class="mb-3" style="color:var(--text-secondary)">Image: <code>telegrammessenger/proxy</code></p>
+            <p class="mb-3" id="dockerImage" style="color:var(--text-secondary)">Image: <code>...</code></p>
             <button class="btn btn-outline" onclick="pullImage()"><i class="fas fa-download mr-1"></i> Pull Latest Image</button>
             <span id="pullStatus" class="ml-3" style="color:var(--text-secondary)"></span>
         </div>
 
+        <!-- About -->
         <div class="card">
             <h3 class="font-bold text-lg mb-2"><i class="fas fa-info-circle mr-2"></i>About</h3>
-            <p style="color:var(--text-secondary)">MTProxy Panel v1.0.0<br>MTProto Proxy management panel inspired by 3x-ui.<br>Built with Go + Gin + SQLite.</p>
+            <p style="color:var(--text-secondary)">MTProxy Panel v1.1.0<br>MTProto Proxy management panel inspired by 3x-ui.<br>Built with Go + Gin + SQLite.</p>
         </div>
     </div>
 
     <script src="/static/js/app.js"></script>
     <script>
+    let selectedBackend = 'official';
+
+    async function loadBackends() {
+        try {
+            const backends = await api('/api/backends');
+            const container = document.getElementById('backendCards');
+            container.innerHTML = '';
+            backends.forEach(b => {
+                if (b.active) selectedBackend = b.id;
+                const card = document.createElement('div');
+                card.className = 'backend-card' + (b.active ? ' active' : '');
+                card.dataset.id = b.id;
+                card.onclick = () => selectBackend(b.id);
+
+                const langClass = b.lang === 'C' ? 'lang-c' : 'lang-rust';
+                let featuresHTML = '';
+                b.features.forEach(f => {
+                    const cls = f.supported ? 'yes' : 'no';
+                    const icon = f.supported ? 'fa-check' : 'fa-times';
+                    featuresHTML += `<li class="${cls}"><span class="feature-icon"><i class="fas ${icon}"></i></span>${f.name}</li>`;
+                });
+
+                card.innerHTML = `
+                    <div class="check-mark"><i class="fas fa-check"></i></div>
+                    <h4>${b.name}</h4>
+                    <span class="backend-lang ${langClass}">${b.lang}</span>
+                    <p class="backend-desc">${b.description}</p>
+                    <div class="backend-image">Docker: <code>${b.image}</code></div>
+                    <ul class="feature-list">${featuresHTML}</ul>
+                `;
+                container.appendChild(card);
+            });
+            updateDockerImage();
+        } catch (e) { console.error(e); }
+    }
+
+    function selectBackend(id) {
+        selectedBackend = id;
+        document.querySelectorAll('.backend-card').forEach(c => {
+            c.classList.toggle('active', c.dataset.id === id);
+        });
+        updateDockerImage();
+    }
+
+    function updateDockerImage() {
+        const activeCard = document.querySelector(`.backend-card[data-id="${selectedBackend}"]`);
+        if (activeCard) {
+            const img = activeCard.querySelector('code').textContent;
+            document.getElementById('dockerImage').innerHTML = `Image: <code>${img}</code>`;
+        }
+    }
+
+    async function saveBackend() {
+        const status = document.getElementById('backendStatus');
+        try {
+            await api('/api/settings', { method: 'POST', body: JSON.stringify({ proxy_backend: selectedBackend }) });
+            status.textContent = 'Saved!';
+            toast('Proxy engine updated');
+            setTimeout(() => status.textContent = '', 3000);
+        } catch (e) { toast(e.message, 'error'); }
+    }
+
     async function loadSettings() {
         try {
             const s = await api('/api/settings');
@@ -95,6 +199,7 @@
         try { await api('/api/pull-image', { method: 'POST' }); s.textContent = 'Done!'; toast('Image pulled'); } catch (e) { s.textContent = 'Failed'; toast(e.message, 'error'); }
     }
 
+    loadBackends();
     loadSettings();
     </script>
 </body>

@@ -25,6 +25,7 @@ type Proxy struct {
 	Name             string   `gorm:"size:128;not null" json:"name"`
 	Port             int      `gorm:"uniqueIndex;not null" json:"port"`
 	FakeTLSDomain    string   `gorm:"size:256;default:google.com" json:"fake_tls_domain"`
+	Backend          string   `gorm:"size:32;default:official" json:"backend"`
 	ContainerID      string   `gorm:"size:128" json:"container_id"`
 	Enabled          bool     `gorm:"default:true" json:"enabled"`
 	TrafficUp        int64    `gorm:"default:0" json:"traffic_up"`

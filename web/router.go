@@ -59,6 +59,8 @@ func NewRouter(cfg *config.Config) *gin.Engine {
 		api.GET("/settings", GetSettings)
 		api.POST("/settings", UpdateSettings)
 		api.POST("/pull-image", PullImageHandler)
+
+		api.GET("/backends", ListBackends)
 	}
 
 	return r

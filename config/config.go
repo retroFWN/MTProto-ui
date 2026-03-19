@@ -10,16 +10,16 @@ import (
 )
 
 type Config struct {
-	Host          string
-	Port          int
-	DBPath        string
-	SecretKey     string
-	DefaultUser   string
-	DefaultPass   string
-	TokenExpiry   int // minutes
-	ProxyImage    string
-	ContainerPfx  string
-	StatsInterval int // seconds
+	Host           string
+	Port           int
+	DBPath         string
+	SecretKey      string
+	DefaultUser    string
+	DefaultPass    string
+	TokenExpiry    int // minutes
+	DefaultBackend string
+	ContainerPfx   string
+	StatsInterval  int // seconds
 }
 
 func Load() *Config {
@@ -28,16 +28,16 @@ func Load() *Config {
 	os.MkdirAll(dataDir, 0755)
 
 	return &Config{
-		Host:          envOr("PANEL_HOST", "0.0.0.0"),
-		Port:          envInt("PANEL_PORT", 8080),
-		DBPath:        filepath.Join(dataDir, "mtproxy.db"),
-		SecretKey:     loadOrCreateSecret(filepath.Join(dataDir, ".secret_key")),
-		DefaultUser:   "admin",
-		DefaultPass:   "admin",
-		TokenExpiry:   360,
-		ProxyImage:    "telegrammessenger/proxy",
-		ContainerPfx:  "mtproxy-",
-		StatsInterval: 10,
+		Host:           envOr("PANEL_HOST", "0.0.0.0"),
+		Port:           envInt("PANEL_PORT", 8080),
+		DBPath:         filepath.Join(dataDir, "mtproxy.db"),
+		SecretKey:      loadOrCreateSecret(filepath.Join(dataDir, ".secret_key")),
+		DefaultUser:    "admin",
+		DefaultPass:    "admin",
+		TokenExpiry:    360,
+		DefaultBackend: envOr("PROXY_BACKEND", "official"),
+		ContainerPfx:   "mtproxy-",
+		StatsInterval:  10,
 	}
 }
 

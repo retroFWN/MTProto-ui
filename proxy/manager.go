@@ -14,16 +14,7 @@ import (
 	"mtproxy-panel/database"
 )
 
-var (
-	ProxyImage   = "telegrammessenger/proxy"
-	ContainerPfx = "mtproxy-"
-)
-
-// InitConfig sets proxy image and container prefix from config.
-func InitConfig(image, prefix string) {
-	ProxyImage = image
-	ContainerPfx = prefix
-}
+var ContainerPfx = "mtproxy-"
 
 func ContainerName(proxyID uint) string {
 	return fmt.Sprintf("%s%d", ContainerPfx, proxyID)
@@ -46,7 +37,7 @@ func GenerateSecret(fakeTLSDomain string) string {
 
 // ── Container lifecycle ──────────────────────────────────────────────────
 
-func StartProxy(proxyID uint, port int, secrets []string) (string, error) {
+func StartProxy(proxyID uint, port int, secrets []string, domain string, backendID string) (string, error) {
 	if len(secrets) == 0 {
 		return "", fmt.Errorf("no secrets provided")
 	}
@@ -54,20 +45,8 @@ func StartProxy(proxyID uint, port int, secrets []string) (string, error) {
 	name := ContainerName(proxyID)
 	StopProxy(proxyID)
 
-	// Build docker run command
-	// First secret via SECRET env var (handled by image entrypoint),
-	// additional secrets via -S flags (passed through to mtproto-proxy binary)
-	args := []string{
-		"run", "-d",
-		"--name", name,
-		"--restart", "unless-stopped",
-		"-p", fmt.Sprintf("%d:443", port),
-		"-e", fmt.Sprintf("SECRET=%s", secrets[0]),
-		ProxyImage,
-	}
-	for _, s := range secrets[1:] {
-		args = append(args, "-S", s)
-	}
+	backend := GetBackend(backendID)
+	args := backend.BuildRunArgs(name, port, secrets, domain)
 
 	out, err := exec.Command("docker", args...).Output()
 	if err != nil {
@@ -75,7 +54,8 @@ func StartProxy(proxyID uint, port int, secrets []string) (string, error) {
 	}
 
 	containerID := strings.TrimSpace(string(out))
-	log.Printf("Started container %s (ID: %.12s) with %d secret(s)", name, containerID, len(secrets))
+	log.Printf("Started container %s (ID: %.12s) with %d secret(s) [%s]",
+		name, containerID, len(secrets), backend.Info().Name)
 	return containerID, nil
 }
 
@@ -85,8 +65,8 @@ func StopProxy(proxyID uint) {
 	exec.Command("docker", "rm", name).Run()
 }
 
-func RestartProxy(proxyID uint, port int, secrets []string) (string, error) {
-	return StartProxy(proxyID, port, secrets)
+func RestartProxy(proxyID uint, port int, secrets []string, domain string, backendID string) (string, error) {
+	return StartProxy(proxyID, port, secrets, domain, backendID)
 }
 
 // ── Container info ───────────────────────────────────────────────────────
@@ -164,10 +144,6 @@ func GetContainerLogs(proxyID uint, tail int) string {
 		return ""
 	}
 	return string(out)
-}
-
-func PullImage() error {
-	return exec.Command("docker", "pull", ProxyImage).Run()
 }
 
 // ── Net bytes parser ─────────────────────────────────────────────────────

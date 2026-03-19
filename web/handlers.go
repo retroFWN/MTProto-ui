@@ -162,6 +162,7 @@ func ListProxies(c *gin.Context) {
 			"name":               p.Name,
 			"port":               p.Port,
 			"fake_tls_domain":    p.FakeTLSDomain,
+			"backend":            p.Backend,
 			"enabled":            p.Enabled,
 			"container_id":       p.ContainerID,
 			"traffic_up":         p.TrafficUp,
@@ -177,10 +178,11 @@ func ListProxies(c *gin.Context) {
 
 func CreateProxy(c *gin.Context) {
 	var req struct {
-		Name           string `json:"name" binding:"required"`
-		Port           int    `json:"port" binding:"required"`
-		FakeTLSDomain  string `json:"fake_tls_domain"`
-		TrafficLimit   int64  `json:"traffic_total_limit"`
+		Name          string `json:"name" binding:"required"`
+		Port          int    `json:"port" binding:"required"`
+		FakeTLSDomain string `json:"fake_tls_domain"`
+		Backend       string `json:"backend"`
+		TrafficLimit  int64  `json:"traffic_total_limit"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"detail": err.Error()})
@@ -188,6 +190,9 @@ func CreateProxy(c *gin.Context) {
 	}
 	if req.FakeTLSDomain == "" {
 		req.FakeTLSDomain = "google.com"
+	}
+	if req.Backend == "" {
+		req.Backend = activeBackend()
 	}
 
 	// Check port uniqueness
@@ -202,6 +207,7 @@ func CreateProxy(c *gin.Context) {
 		Name:          req.Name,
 		Port:          req.Port,
 		FakeTLSDomain: req.FakeTLSDomain,
+		Backend:       req.Backend,
 		TrafficLimit:  req.TrafficLimit,
 		Enabled:       true,
 	}
@@ -217,7 +223,7 @@ func CreateProxy(c *gin.Context) {
 	database.DB.Create(&client)
 
 	secrets := database.GetEnabledSecrets(p.ID)
-	containerID, err := proxy.StartProxy(p.ID, p.Port, secrets)
+	containerID, err := proxy.StartProxy(p.ID, p.Port, secrets, p.FakeTLSDomain, p.Backend)
 	if err == nil {
 		database.DB.Model(&p).Update("container_id", containerID)
 	}
@@ -273,7 +279,7 @@ func UpdateProxy(c *gin.Context) {
 		if p.Enabled {
 			secrets := database.GetEnabledSecrets(p.ID)
 			if len(secrets) > 0 {
-				cid, _ := proxy.RestartProxy(p.ID, p.Port, secrets)
+				cid, _ := proxy.RestartProxy(p.ID, p.Port, secrets, p.FakeTLSDomain, p.Backend)
 				database.DB.Model(&p).Update("container_id", cid)
 			}
 		} else {
@@ -318,7 +324,7 @@ func StartProxyHandler(c *gin.Context) {
 		return
 	}
 
-	cid, err := proxy.StartProxy(p.ID, p.Port, secrets)
+	cid, err := proxy.StartProxy(p.ID, p.Port, secrets, p.FakeTLSDomain, p.Backend)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"detail": err.Error()})
 		return
@@ -360,7 +366,7 @@ func RestartProxyHandler(c *gin.Context) {
 		return
 	}
 
-	cid, err := proxy.RestartProxy(p.ID, p.Port, secrets)
+	cid, err := proxy.RestartProxy(p.ID, p.Port, secrets, p.FakeTLSDomain, p.Backend)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"detail": err.Error()})
 		return
@@ -587,11 +593,33 @@ func UpdateSettings(c *gin.Context) {
 }
 
 func PullImageHandler(c *gin.Context) {
-	if err := proxy.PullImage(); err != nil {
+	backendID := activeBackend()
+	backend := proxy.GetBackend(backendID)
+	if err := backend.PullImage(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"detail": "Failed to pull image"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Image pulled successfully"})
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Image pulled: " + backend.Info().Image})
+}
+
+// ── Backends ─────────────────────────────────────────────────────────────
+
+func ListBackends(c *gin.Context) {
+	active := activeBackend()
+	backends := proxy.AllBackends()
+	result := make([]gin.H, 0, len(backends))
+	for _, b := range backends {
+		result = append(result, gin.H{
+			"id":          b.ID,
+			"name":        b.Name,
+			"lang":        b.Lang,
+			"image":       b.Image,
+			"description": b.Description,
+			"features":    b.Features,
+			"active":      b.ID == active,
+		})
+	}
+	c.JSON(http.StatusOK, result)
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────
@@ -603,4 +631,12 @@ func parseID(c *gin.Context, param string) (uint, bool) {
 		return 0, false
 	}
 	return uint(id), true
+}
+
+func activeBackend() string {
+	var s database.Setting
+	if database.DB.Where("`key` = ?", "proxy_backend").First(&s).Error == nil && s.Value != "" {
+		return s.Value
+	}
+	return "official"
 }
