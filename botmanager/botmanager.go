@@ -3,6 +3,7 @@ package botmanager
 import (
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -10,10 +11,11 @@ import (
 )
 
 var (
-	mu      sync.Mutex
-	cmd     *exec.Cmd
-	running bool
-	lastErr string
+	mu       sync.Mutex
+	cmd      *exec.Cmd
+	running  bool
+	stopped  bool // true when Stop() was called — suppresses "signal: killed" error
+	lastErr  string
 )
 
 func pythonBin() string {
@@ -24,8 +26,6 @@ func pythonBin() string {
 }
 
 // Start launches the aiogram bot as a subprocess.
-// panelURL is the panel's own base URL (e.g. http://127.0.0.1:8080).
-// secretKey is the panel's secret key for bot API auth.
 func Start(botDir, botToken, adminIDs, panelURL, secretKey string) error {
 	mu.Lock()
 	defer mu.Unlock()
@@ -40,7 +40,7 @@ func Start(botDir, botToken, adminIDs, panelURL, secretKey string) error {
 	mainPy := filepath.Join(botDir, "main.py")
 	cmd = exec.Command(pythonBin(), mainPy)
 	cmd.Dir = botDir
-	cmd.Env = append(cmd.Environ(),
+	cmd.Env = append(os.Environ(),
 		"BOT_BOT_TOKEN="+botToken,
 		"BOT_PANEL_URL="+panelURL,
 		"BOT_PANEL_SECRET="+secretKey,
@@ -53,18 +53,18 @@ func Start(botDir, botToken, adminIDs, panelURL, secretKey string) error {
 	}
 
 	running = true
+	stopped = false
 	lastErr = ""
 	log.Printf("Telegram bot started (PID %d)", cmd.Process.Pid)
 
-	// Monitor process in background
 	go func() {
 		err := cmd.Wait()
 		mu.Lock()
 		running = false
-		if err != nil {
+		if err != nil && !stopped {
 			lastErr = err.Error()
-			log.Printf("Telegram bot exited: %v", err)
-		} else {
+			log.Printf("Telegram bot exited unexpectedly: %v", err)
+		} else if !stopped {
 			log.Printf("Telegram bot exited normally")
 		}
 		mu.Unlock()
@@ -82,6 +82,7 @@ func Stop() error {
 		return nil
 	}
 
+	stopped = true
 	if err := cmd.Process.Kill(); err != nil {
 		return fmt.Errorf("failed to stop bot: %w", err)
 	}

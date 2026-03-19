@@ -9,13 +9,15 @@ from config import cfg
 router = Router()
 
 
-def is_admin(user_id: int) -> bool:
-    return user_id in cfg.admin_ids
+def is_admin(msg: types.Message) -> bool:
+    if not msg.from_user:
+        return False
+    return msg.from_user.id in cfg.admin_ids
 
 
 @router.message(Command("addclient"))
 async def cmd_add_client(msg: types.Message) -> None:
-    if not is_admin(msg.from_user.id):
+    if not is_admin(msg):
         await msg.answer("⛔ Нет доступа.")
         return
 
@@ -52,12 +54,14 @@ async def cmd_add_client(msg: types.Message) -> None:
     try:
         result = await panel.create_client(proxy_id, name, traffic_limit, expiry_days)
         secret = result.get("secret", "—")
-        cid = result.get("ID") or result.get("id")
+        cid = result.get("id")
+        tg_link = result.get("tg_link", "")
         await msg.answer(
             f"✅ Клиент создан!\n\n"
             f"ID: <b>{cid}</b>\n"
             f"Имя: <b>{name}</b>\n"
-            f"Secret: <code>{secret}</code>",
+            f"Secret: <code>{secret}</code>\n"
+            f"Ссылка: <code>{tg_link}</code>",
             parse_mode="HTML",
         )
     except Exception as e:
@@ -66,7 +70,7 @@ async def cmd_add_client(msg: types.Message) -> None:
 
 @router.message(Command("delclient"))
 async def cmd_del_client(msg: types.Message) -> None:
-    if not is_admin(msg.from_user.id):
+    if not is_admin(msg):
         await msg.answer("⛔ Нет доступа.")
         return
 
@@ -94,7 +98,7 @@ async def cmd_del_client(msg: types.Message) -> None:
 
 @router.message(Command("resettraffic"))
 async def cmd_reset_traffic(msg: types.Message) -> None:
-    if not is_admin(msg.from_user.id):
+    if not is_admin(msg):
         await msg.answer("⛔ Нет доступа.")
         return
 

@@ -32,7 +32,7 @@ async def cmd_proxies(msg: types.Message) -> None:
     for p in proxies:
         status = "🟢" if p.get("status") == "running" else "🔴"
         name = p.get("name", "—")
-        pid = p.get("ID") or p.get("id")
+        pid = p.get("id")
         port = p.get("port", "?")
         clients = p.get("client_count", 0)
         lines.append(f"{status} <b>{name}</b> (ID: {pid}) — :{port}, клиентов: {clients}")
@@ -55,12 +55,9 @@ async def cmd_connect(msg: types.Message) -> None:
 
     try:
         clients = await panel.list_clients(proxy_id)
-        settings = await panel.get_settings()
     except Exception as e:
         await msg.answer(f"Ошибка: {e}")
         return
-
-    server_ip = settings.get("server_ip", "YOUR_SERVER_IP")
 
     if not clients:
         await msg.answer("У этого прокси нет клиентов.")
@@ -69,14 +66,12 @@ async def cmd_connect(msg: types.Message) -> None:
     lines = [f"<b>Ссылки для прокси #{proxy_id}:</b>\n"]
     for c in clients:
         name = c.get("name", "—")
-        secret = c.get("secret", "")
-        port = c.get("proxy_port", 443)
         enabled = c.get("enabled", True)
+        tg_link = c.get("tg_link", "")
         if not enabled:
             lines.append(f"⛔ <s>{name}</s> — отключен")
             continue
-        link = f"tg://proxy?server={server_ip}&port={port}&secret={secret}"
-        lines.append(f"✅ <b>{name}</b>\n<code>{link}</code>")
+        lines.append(f"✅ <b>{name}</b>\n<code>{tg_link}</code>")
 
     await msg.answer("\n".join(lines), parse_mode="HTML")
 
@@ -107,14 +102,18 @@ async def cmd_status(msg: types.Message) -> None:
     lines = [f"<b>Клиенты прокси #{proxy_id}:</b>\n"]
     for c in clients:
         name = c.get("name", "—")
-        cid = c.get("ID") or c.get("id")
+        cid = c.get("id")
         enabled = "✅" if c.get("enabled", True) else "⛔"
         up = format_bytes(c.get("traffic_up", 0))
         down = format_bytes(c.get("traffic_down", 0))
         limit = c.get("traffic_limit", 0)
         limit_str = format_bytes(limit) if limit > 0 else "∞"
-        expiry = c.get("expiry_date")
-        expiry_str = expiry[:10] if expiry else "—"
+        expiry = c.get("expiry_time", 0)
+        if expiry and expiry > 0:
+            from datetime import datetime
+            expiry_str = datetime.fromtimestamp(expiry).strftime("%Y-%m-%d")
+        else:
+            expiry_str = "—"
         lines.append(
             f"{enabled} <b>{name}</b> (ID: {cid})\n"
             f"   ↑ {up}  ↓ {down}  лимит: {limit_str}\n"

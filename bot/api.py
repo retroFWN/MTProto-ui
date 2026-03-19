@@ -1,5 +1,7 @@
 """HTTP client for the MTProxy Panel /bot/api endpoints."""
 
+import time
+
 import aiohttp
 from config import cfg
 
@@ -37,19 +39,23 @@ class PanelAPI:
     async def list_clients(self, proxy_id: int) -> list:
         return await self._get(f"/bot/api/proxies/{proxy_id}/clients")
 
-    async def create_client(self, proxy_id: int, name: str, traffic_limit: int = 0, expiry_days: int = 0) -> dict:
+    async def create_client(
+        self, proxy_id: int, name: str, traffic_limit: int = 0, expiry_days: int = 0
+    ) -> dict:
         payload: dict = {"name": name}
         if traffic_limit > 0:
             payload["traffic_limit"] = traffic_limit
         if expiry_days > 0:
-            payload["expiry_days"] = expiry_days
+            payload["expiry_time"] = int(time.time()) + expiry_days * 86400
         return await self._post(f"/bot/api/proxies/{proxy_id}/clients", json=payload)
 
     async def delete_client(self, proxy_id: int, client_id: int) -> dict:
         return await self._delete(f"/bot/api/proxies/{proxy_id}/clients/{client_id}")
 
     async def reset_traffic(self, proxy_id: int, client_id: int) -> dict:
-        return await self._post(f"/bot/api/proxies/{proxy_id}/clients/{client_id}/reset-traffic")
+        return await self._post(
+            f"/bot/api/proxies/{proxy_id}/clients/{client_id}/reset-traffic"
+        )
 
     # --- Settings ---
 

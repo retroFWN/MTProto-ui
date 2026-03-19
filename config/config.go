@@ -12,6 +12,7 @@ import (
 type Config struct {
 	Host           string
 	Port           int
+	BaseDir        string
 	DBPath         string
 	DataDir        string
 	SecretKey      string
@@ -32,6 +33,7 @@ func Load() *Config {
 	return &Config{
 		Host:           envOr("PANEL_HOST", "0.0.0.0"),
 		Port:           envInt("PANEL_PORT", 8080),
+		BaseDir:        base,
 		DBPath:         filepath.Join(dataDir, "mtproxy.db"),
 		DataDir:        dataDir,
 		SecretKey:      loadOrCreateSecret(filepath.Join(dataDir, ".secret_key")),

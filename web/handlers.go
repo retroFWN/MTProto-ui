@@ -3,6 +3,7 @@ package web
 import (
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"time"
@@ -648,7 +649,7 @@ func BotStart(cfg *config.Config) gin.HandlerFunc {
 		}
 
 		panelURL := fmt.Sprintf("http://127.0.0.1:%d", cfg.Port)
-		botDir := "bot"
+		botDir := filepath.Join(cfg.BaseDir, "bot")
 
 		if err := botmanager.Start(botDir, token, adminIDs, panelURL, cfg.SecretKey); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"detail": err.Error()})
