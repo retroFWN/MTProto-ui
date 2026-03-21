@@ -4,10 +4,12 @@ WORKDIR /build
 
 RUN apk add --no-cache gcc musl-dev
 
-COPY go.mod go.sum ./
+COPY go.mod ./
+COPY go.sum* ./
 RUN go mod download
 
 COPY . .
+RUN go mod tidy
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o mtproxy-panel .
 
 # ── Runtime ──
