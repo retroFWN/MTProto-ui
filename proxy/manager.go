@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -26,7 +27,9 @@ func GenerateSecret(fakeTLSDomain string) string {
 	// ee (2) + 32 hex chars = 34 chars (standard MTProto FakeTLS secret)
 	needed := 32 - len(domainHex)
 	if needed > 0 {
-		return "ee" + domainHex + strings.Repeat("0", needed)
+		randBytes := make([]byte, (needed+1)/2)
+		rand.Read(randBytes)
+		return "ee" + domainHex + hex.EncodeToString(randBytes)[:needed]
 	}
 	return "ee" + domainHex[:32]
 }
