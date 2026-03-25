@@ -1,6 +1,6 @@
 {{define "login.html"}}
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en" data-i18n-title="page_title_login">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -14,27 +14,36 @@
         <div class="card" style="width:400px;">
             <div class="text-center mb-6">
                 <i class="fas fa-paper-plane text-4xl mb-4" style="color:var(--accent);"></i>
-                <h1 class="text-2xl font-bold">MTProxy Panel</h1>
-                <p class="text-sm" style="color:var(--text-secondary);margin-top:4px;">MTProto Proxy Management</p>
+                <h1 class="text-2xl font-bold" data-i18n="app_name"></h1>
+                <p class="text-sm" style="color:var(--text-secondary);margin-top:4px;" data-i18n="app_subtitle"></p>
             </div>
             <form id="loginForm" onsubmit="handleLogin(event)">
                 <div class="mb-4">
-                    <label>Username</label>
-                    <input type="text" id="username" placeholder="admin" required autofocus>
+                    <label data-i18n="label_username"></label>
+                    <input type="text" id="username" data-i18n-placeholder="placeholder_username" required autofocus>
                 </div>
                 <div class="mb-4">
-                    <label>Password</label>
-                    <input type="password" id="password" placeholder="password" required>
+                    <label data-i18n="label_password"></label>
+                    <input type="password" id="password" data-i18n-placeholder="placeholder_password" required>
                 </div>
                 <div id="loginError" class="mb-4 text-sm" style="color:var(--danger);display:none;"></div>
                 <button type="submit" class="btn btn-primary w-full" style="padding:12px;justify-content:center;">
-                    <i class="fas fa-sign-in-alt mr-2"></i> Login
+                    <i class="fas fa-sign-in-alt mr-2"></i> <span data-i18n="btn_login"></span>
                 </button>
             </form>
+            <div class="lang-switcher-login">
+                <button onclick="setLang('en')" class="lang-btn" data-lang="en">EN</button>
+                <button onclick="setLang('ru')" class="lang-btn" data-lang="ru">RU</button>
+                <button onclick="setLang('zh')" class="lang-btn" data-lang="zh">ZH</button>
+            </div>
         </div>
     </div>
+    <script src="/static/js/i18n.js"></script>
     <script src="/static/js/app.js"></script>
     <script>
+    applyI18n();
+    function onLangChange() { applyI18n(); }
+
     async function handleLogin(e) {
         e.preventDefault();
         const errEl = document.getElementById('loginError');

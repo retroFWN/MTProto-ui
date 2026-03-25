@@ -10,7 +10,7 @@ async function api(url, options = {}) {
         return;
     }
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Request failed');
+    if (!res.ok) throw new Error(data.detail || t('error_request_failed'));
     return data;
 }
 
@@ -41,7 +41,7 @@ function formatUptime(seconds) {
 }
 
 function copyToClipboard(text) {
-    navigator.clipboard.writeText(text).then(() => toast('Copied!')).catch(() => {});
+    navigator.clipboard.writeText(text).then(() => toast(t('copied'))).catch(() => {});
 }
 
 async function logout() {

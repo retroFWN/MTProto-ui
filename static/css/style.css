@@ -122,3 +122,9 @@ tr:hover { background: rgba(59,130,246,.05); }
 .section-divider { border-top: 1px solid var(--border); padding-top: 16px; margin-top: 16px; }
 code { font-size: 12px; cursor: pointer; background: var(--bg-primary); padding: 2px 6px; border-radius: 4px; }
 pre { background: var(--bg-primary); padding: 12px; border-radius: 8px; max-height: 400px; overflow: auto; font-size: 12px; white-space: pre-wrap; }
+
+/* Language switcher */
+.lang-switcher { display: flex; gap: 4px; margin-bottom: 8px; padding: 0 20px; }
+.lang-btn { background: transparent; border: 1px solid var(--border); color: var(--text-secondary); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all .2s; }
+.lang-btn:hover, .lang-btn.active { border-color: var(--accent); color: var(--accent); }
+.lang-switcher-login { display: flex; gap: 4px; justify-content: center; margin-top: 16px; }

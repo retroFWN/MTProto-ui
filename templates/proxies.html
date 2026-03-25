@@ -1,6 +1,6 @@
 {{define "proxies.html"}}
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en" data-i18n-title="page_title_proxies">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -32,50 +32,57 @@
     <div id="toast" class="toast"></div>
 
     <div class="sidebar">
-        <div class="sidebar-brand"><i class="fas fa-paper-plane"></i><div><div class="name">MTProxy Panel</div><div class="ver">v1.2.0</div></div></div>
+        <div class="sidebar-brand"><i class="fas fa-paper-plane"></i><div><div class="name" data-i18n="app_name"></div><div class="ver">v1.2.0</div></div></div>
         <nav>
-            <a href="/panel"><i class="fas fa-chart-line"></i> Dashboard</a>
-            <a href="/panel/proxies" class="active"><i class="fas fa-server"></i> Proxies</a>
-            <a href="/panel/settings"><i class="fas fa-cog"></i> Settings</a>
+            <a href="/panel"><i class="fas fa-chart-line"></i> <span data-i18n="nav_dashboard"></span></a>
+            <a href="/panel/proxies" class="active"><i class="fas fa-server"></i> <span data-i18n="nav_proxies"></span></a>
+            <a href="/panel/settings"><i class="fas fa-cog"></i> <span data-i18n="nav_settings"></span></a>
         </nav>
-        <div class="sidebar-footer"><a href="#" onclick="logout()"><i class="fas fa-sign-out-alt mr-2"></i>Logout</a></div>
+        <div class="sidebar-footer">
+            <div class="lang-switcher">
+                <button onclick="setLang('en')" class="lang-btn" data-lang="en">EN</button>
+                <button onclick="setLang('ru')" class="lang-btn" data-lang="ru">RU</button>
+                <button onclick="setLang('zh')" class="lang-btn" data-lang="zh">ZH</button>
+            </div>
+            <a href="#" onclick="logout()"><i class="fas fa-sign-out-alt mr-2"></i><span data-i18n="btn_logout"></span></a>
+        </div>
     </div>
 
     <div class="main">
         <div class="flex items-center justify-between mb-6">
             <div>
-                <h1 class="page-title">Proxies</h1>
-                <p class="page-sub" style="margin-bottom:0">Manage MTProto proxy instances and clients</p>
+                <h1 class="page-title" data-i18n="proxies_title"></h1>
+                <p class="page-sub" style="margin-bottom:0" data-i18n="proxies_subtitle"></p>
             </div>
-            <button class="btn btn-primary" onclick="showCreateModal()"><i class="fas fa-plus mr-1"></i> New Proxy</button>
+            <button class="btn btn-primary" onclick="showCreateModal()"><i class="fas fa-plus mr-1"></i> <span data-i18n="btn_new_proxy"></span></button>
         </div>
-        <div id="proxies-list"><p style="color:var(--text-secondary)">Loading...</p></div>
+        <div id="proxies-list"><p style="color:var(--text-secondary)" data-i18n="loading"></p></div>
     </div>
 
     <!-- Create Proxy Modal -->
     <div id="createModal" class="modal-overlay">
         <div class="modal">
-            <h3>New Proxy</h3>
-            <div class="mb-3"><label>Name</label><input type="text" id="proxyName" placeholder="My Proxy"></div>
-            <div class="mb-3"><label>Port</label><input type="number" id="proxyPort" value="443"></div>
-            <div class="mb-3"><label>Fake TLS Domain</label><input type="text" id="proxyDomain" value="google.com"></div>
+            <h3 data-i18n="modal_new_proxy"></h3>
+            <div class="mb-3"><label data-i18n="label_name"></label><input type="text" id="proxyName" data-i18n-placeholder="placeholder_proxy_name"></div>
+            <div class="mb-3"><label data-i18n="label_port"></label><input type="number" id="proxyPort" value="443"></div>
+            <div class="mb-3"><label data-i18n="label_fake_tls_domain"></label><input type="text" id="proxyDomain" value="google.com"></div>
             <div class="mb-4">
-                <label>Proxy Engine</label>
+                <label data-i18n="label_proxy_engine"></label>
                 <div class="engine-toggle">
                     <div class="engine-btn active" data-engine="official" onclick="selectEngine(this)">
-                        <div class="engine-name">Official</div>
-                        <div class="engine-lang">C</div>
+                        <div class="engine-name" data-i18n="engine_official"></div>
+                        <div class="engine-lang" data-i18n="engine_official_lang"></div>
                     </div>
                     <div class="engine-btn" data-engine="telemt" onclick="selectEngine(this)">
-                        <div class="engine-name">telemt</div>
-                        <div class="engine-lang">Rust — per-user stats</div>
+                        <div class="engine-name" data-i18n="engine_telemt"></div>
+                        <div class="engine-lang" data-i18n="engine_telemt_lang"></div>
                     </div>
                 </div>
                 <input type="hidden" id="proxyBackend" value="official">
             </div>
             <div class="flex justify-between gap-2" style="justify-content:flex-end">
-                <button class="btn btn-outline" onclick="hideModal('createModal')">Cancel</button>
-                <button class="btn btn-primary" onclick="createProxy()">Create</button>
+                <button class="btn btn-outline" onclick="hideModal('createModal')"><span data-i18n="btn_cancel"></span></button>
+                <button class="btn btn-primary" onclick="createProxy()"><span data-i18n="btn_create"></span></button>
             </div>
         </div>
     </div>
@@ -83,14 +90,14 @@
     <!-- Add Client Modal -->
     <div id="addClientModal" class="modal-overlay">
         <div class="modal">
-            <h3>Add Client</h3>
+            <h3 data-i18n="modal_add_client"></h3>
             <input type="hidden" id="clientProxyId">
-            <div class="mb-3"><label>Client Name</label><input type="text" id="clientName" placeholder="User 1"></div>
-            <div class="mb-3"><label>Traffic Limit (bytes, 0 = unlimited)</label><input type="number" id="clientTrafficLimit" value="0"></div>
-            <div class="mb-4"><label>Expiry (Unix timestamp, 0 = never)</label><input type="number" id="clientExpiry" value="0"></div>
+            <div class="mb-3"><label data-i18n="label_client_name"></label><input type="text" id="clientName" data-i18n-placeholder="placeholder_client_name"></div>
+            <div class="mb-3"><label data-i18n="label_traffic_limit"></label><input type="number" id="clientTrafficLimit" value="0"></div>
+            <div class="mb-4"><label data-i18n="label_expiry"></label><input type="number" id="clientExpiry" value="0"></div>
             <div class="flex gap-2" style="justify-content:flex-end">
-                <button class="btn btn-outline" onclick="hideModal('addClientModal')">Cancel</button>
-                <button class="btn btn-primary" onclick="addClient()">Add</button>
+                <button class="btn btn-outline" onclick="hideModal('addClientModal')"><span data-i18n="btn_cancel"></span></button>
+                <button class="btn btn-primary" onclick="addClient()"><span data-i18n="btn_add"></span></button>
             </div>
         </div>
     </div>
@@ -99,17 +106,21 @@
     <div id="logsModal" class="modal-overlay">
         <div class="modal" style="max-width:700px">
             <div class="flex items-center justify-between mb-4">
-                <h3 style="margin:0">Container Logs</h3>
-                <button class="btn btn-outline btn-sm" onclick="hideModal('logsModal')">Close</button>
+                <h3 style="margin:0" data-i18n="modal_container_logs"></h3>
+                <button class="btn btn-outline btn-sm" onclick="hideModal('logsModal')"><span data-i18n="btn_close"></span></button>
             </div>
             <pre id="logsContent"></pre>
         </div>
     </div>
 
+    <script src="/static/js/i18n.js"></script>
     <script src="/static/js/app.js"></script>
     <script>
-    let liveData = {}; // proxyId → live response
-    let proxyMeta = {}; // proxyId → {backend, running}
+    applyI18n();
+    let liveData = {};
+    let proxyMeta = {};
+
+    function onLangChange() { applyI18n(); refresh(); }
 
     function selectEngine(el) {
         el.parentElement.querySelectorAll('.engine-btn').forEach(b => b.classList.remove('active'));
@@ -124,16 +135,16 @@
             if (proxies.length === 0) {
                 el.innerHTML = `<div class="card text-center py-12">
                     <i class="fas fa-server text-4xl mb-4" style="color:var(--text-secondary)"></i>
-                    <p class="text-lg mb-2">No proxies yet</p>
-                    <p style="color:var(--text-secondary)" class="mb-4">Create your first MTProto proxy instance</p>
-                    <button class="btn btn-primary" onclick="showCreateModal()"><i class="fas fa-plus mr-1"></i> Create Proxy</button>
+                    <p class="text-lg mb-2">${t('no_proxies_yet')}</p>
+                    <p style="color:var(--text-secondary)" class="mb-4">${t('no_proxies_create_first')}</p>
+                    <button class="btn btn-primary" onclick="showCreateModal()"><i class="fas fa-plus mr-1"></i> ${t('btn_create_proxy')}</button>
                 </div>`;
                 return;
             }
             let html = '';
             for (const p of proxies) {
                 const running = p.status.running;
-                const badge = running ? '<span class="badge badge-success">Running</span>' : '<span class="badge badge-danger">Stopped</span>';
+                const badge = running ? `<span class="badge badge-success">${t('status_running')}</span>` : `<span class="badge badge-danger">${t('status_stopped')}</span>`;
                 const isTelemt = p.backend === 'telemt';
                 const engineBadge = isTelemt
                     ? '<span style="color:#ef7744;font-weight:600">Rust</span>'
@@ -144,14 +155,13 @@
                        <button class="btn btn-danger btn-sm" onclick="proxyAction(${p.id},'stop')"><i class="fas fa-stop"></i></button>`
                     : `<button class="btn btn-success btn-sm" onclick="proxyAction(${p.id},'start')"><i class="fas fa-play"></i></button>`;
 
-                // Live summary for telemt
                 let liveSummaryHtml = '';
                 if (isTelemt && running && liveData[p.id] && liveData[p.id].supported && liveData[p.id].summary) {
                     const s = liveData[p.id].summary;
                     liveSummaryHtml = `
-                        <div><div class="stat-label">Connections</div><div class="font-bold">${s.current_connections || 0}</div></div>
-                        <div><div class="stat-label">Total Conns</div><div class="font-bold">${s.connections_total || 0}</div></div>
-                        <div><div class="stat-label">Uptime</div><div class="font-bold">${formatUptime(s.uptime_seconds || 0)}</div></div>`;
+                        <div><div class="stat-label">${t('stat_connections')}</div><div class="font-bold">${s.current_connections || 0}</div></div>
+                        <div><div class="stat-label">${t('stat_total_conns')}</div><div class="font-bold">${s.connections_total || 0}</div></div>
+                        <div><div class="stat-label">${t('stat_uptime')}</div><div class="font-bold">${formatUptime(s.uptime_seconds || 0)}</div></div>`;
                 }
 
                 html += `<div class="card">
@@ -161,7 +171,7 @@
                             <div>
                                 <h3 class="font-bold text-lg">${p.name}</h3>
                                 <span class="text-sm" style="color:var(--text-secondary)">Port: ${p.port} | ${p.fake_tls_domain} | ${engineBadge} | ${badge}</span>
-                                ${isTelemt && running ? ' <span class="live-badge"><i class="fas fa-chart-bar"></i> Live Stats</span>' : ''}
+                                ${isTelemt && running ? ` <span class="live-badge"><i class="fas fa-chart-bar"></i> ${t('live_stats_badge')}</span>` : ''}
                             </div>
                         </div>
                         <div class="flex gap-2">
@@ -171,17 +181,17 @@
                         </div>
                     </div>
                     <div class="grid grid-3 section-divider">
-                        <div><div class="stat-label">Upload</div><div class="font-bold">${formatBytes(p.traffic_up)}</div></div>
-                        <div><div class="stat-label">Download</div><div class="font-bold">${formatBytes(p.traffic_down)}</div></div>
-                        <div><div class="stat-label">Total</div><div class="font-bold">${formatBytes(p.traffic_up + p.traffic_down)}</div></div>
+                        <div><div class="stat-label">${t('stat_upload')}</div><div class="font-bold">${formatBytes(p.traffic_up)}</div></div>
+                        <div><div class="stat-label">${t('stat_download')}</div><div class="font-bold">${formatBytes(p.traffic_down)}</div></div>
+                        <div><div class="stat-label">${t('stat_total')}</div><div class="font-bold">${formatBytes(p.traffic_up + p.traffic_down)}</div></div>
                     </div>
                     ${liveSummaryHtml ? `<div class="grid grid-3 section-divider">${liveSummaryHtml}</div>` : ''}
                     <div class="section-divider">
                         <div class="flex items-center justify-between mb-3">
-                            <h4 class="font-bold">Clients (${p.client_count})</h4>
-                            <button class="btn btn-outline btn-sm" onclick="showAddClientModal(${p.id})"><i class="fas fa-plus mr-1"></i>Add Client</button>
+                            <h4 class="font-bold">${t('clients_count', {count: p.client_count})}</h4>
+                            <button class="btn btn-outline btn-sm" onclick="showAddClientModal(${p.id})"><i class="fas fa-plus mr-1"></i>${t('btn_add_client')}</button>
                         </div>
-                        <div id="clients-${p.id}"><p class="text-sm" style="color:var(--text-secondary)">Loading...</p></div>
+                        <div id="clients-${p.id}"><p class="text-sm" style="color:var(--text-secondary)">${t('loading')}</p></div>
                     </div>
                 </div>`;
             }
@@ -197,23 +207,21 @@
         try {
             const clients = await api(`/api/proxies/${proxyId}/clients`);
             const el = document.getElementById(`clients-${proxyId}`);
-            if (clients.length === 0) { el.innerHTML = '<p class="text-sm" style="color:var(--text-secondary)">No clients</p>'; return; }
+            if (clients.length === 0) { el.innerHTML = `<p class="text-sm" style="color:var(--text-secondary)">${t('no_clients')}</p>`; return; }
 
             const isTelemt = backend === 'telemt';
             const live = (isTelemt && running && liveData[proxyId] && liveData[proxyId].users) ? liveData[proxyId].users : [];
-
-            // Build lookup: client_id → live data
             const liveMap = {};
             for (const u of live) { liveMap[u.client_id] = u; }
 
             let extraHeaders = '';
             if (isTelemt) {
-                extraHeaders = '<th>Online</th><th>Conns</th><th>IPs</th>';
+                extraHeaders = `<th>${t('table_header_online')}</th><th>${t('table_header_conns')}</th><th>${t('table_header_ips')}</th>`;
             }
 
-            let html = `<table><thead><tr><th>Name</th><th>Secret</th><th>Status</th><th>Traffic</th>${extraHeaders}<th>Link</th><th>Actions</th></tr></thead><tbody>`;
+            let html = `<table><thead><tr><th>${t('table_header_name')}</th><th>${t('table_header_secret')}</th><th>${t('table_header_status')}</th><th>${t('table_header_traffic')}</th>${extraHeaders}<th>${t('table_header_link')}</th><th>${t('table_header_actions')}</th></tr></thead><tbody>`;
             for (const c of clients) {
-                const badge = c.enabled ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-danger">Disabled</span>';
+                const badge = c.enabled ? `<span class="badge badge-success">${t('client_active')}</span>` : `<span class="badge badge-danger">${t('client_disabled')}</span>`;
                 const traffic = formatBytes(c.traffic_up + c.traffic_down) + (c.traffic_limit > 0 ? ' / ' + formatBytes(c.traffic_limit) : '');
 
                 let extraCols = '';
@@ -225,21 +233,21 @@
                             : '<span class="live-dot offline"></span>';
                         const ips = (u.active_ips || []).join(', ');
                         extraCols = `
-                            <td>${onlineDot} ${u.current_connections > 0 ? 'Online' : 'Offline'}</td>
+                            <td>${onlineDot} ${u.current_connections > 0 ? t('client_online') : t('client_offline')}</td>
                             <td class="font-bold">${u.current_connections}</td>
                             <td class="ip-list">${u.active_unique_ips} ${ips ? '(' + ips + ')' : ''}</td>`;
                     } else {
-                        extraCols = '<td><span class="live-dot offline"></span> —</td><td>—</td><td>—</td>';
+                        extraCols = `<td><span class="live-dot offline"></span> —</td><td>—</td><td>—</td>`;
                     }
                 }
 
                 html += `<tr>
                     <td class="font-medium">${c.name}</td>
-                    <td><code onclick="copyToClipboard('${c.secret}')" title="Click to copy">${c.secret.substring(0,16)}...</code></td>
+                    <td><code onclick="copyToClipboard('${c.secret}')" title="${t('click_to_copy')}">${c.secret.substring(0,16)}...</code></td>
                     <td>${badge}</td>
                     <td>${traffic}</td>
                     ${extraCols}
-                    <td><button class="btn btn-outline btn-sm" onclick="copyToClipboard('${c.tg_link}')" title="Copy tg:// link"><i class="fas fa-link"></i></button></td>
+                    <td><button class="btn btn-outline btn-sm" onclick="copyToClipboard('${c.tg_link}')" title="${t('copy_tg_link')}"><i class="fas fa-link"></i></button></td>
                     <td><div class="flex gap-2">
                         <button class="btn btn-outline btn-sm" onclick="toggleClient(${proxyId},${c.id},${!c.enabled})"><i class="fas fa-${c.enabled?'pause':'play'}"></i></button>
                         <button class="btn btn-outline btn-sm" onclick="resetTraffic(${proxyId},${c.id})"><i class="fas fa-undo"></i></button>
@@ -252,7 +260,6 @@
         } catch (e) { console.error(e); }
     }
 
-    // Fetch live stats for known telemt proxies
     async function fetchLiveData() {
         for (const [id, meta] of Object.entries(proxyMeta)) {
             if (meta.backend === 'telemt' && meta.running) {
@@ -264,7 +271,6 @@
     }
 
     function showCreateModal() {
-        // Load default backend from settings
         api('/api/settings').then(s => {
             const def = s.proxy_backend || 'official';
             document.getElementById('proxyBackend').value = def;
@@ -272,9 +278,14 @@
                 b.classList.toggle('active', b.dataset.engine === def);
             });
         }).catch(() => {});
+        applyI18n();
         document.getElementById('createModal').classList.add('active');
     }
-    function showAddClientModal(id) { document.getElementById('clientProxyId').value = id; document.getElementById('addClientModal').classList.add('active'); }
+    function showAddClientModal(id) {
+        document.getElementById('clientProxyId').value = id;
+        applyI18n();
+        document.getElementById('addClientModal').classList.add('active');
+    }
     function hideModal(id) { document.getElementById(id).classList.remove('active'); }
 
     async function createProxy() {
@@ -285,13 +296,20 @@
                 fake_tls_domain: document.getElementById('proxyDomain').value,
                 backend: document.getElementById('proxyBackend').value,
             })});
-            hideModal('createModal'); toast('Proxy created'); loadProxies();
+            hideModal('createModal'); toast(t('toast_proxy_created')); loadProxies();
         } catch (e) { toast(e.message, 'error'); }
     }
 
-    async function deleteProxy(id) { if (!confirm('Delete this proxy and all its clients?')) return; try { await api(`/api/proxies/${id}`, { method: 'DELETE' }); toast('Proxy deleted'); loadProxies(); } catch (e) { toast(e.message, 'error'); } }
-    async function proxyAction(id, action) { try { await api(`/api/proxies/${id}/${action}`, { method: 'POST' }); toast(`Proxy ${action}ed`); loadProxies(); } catch (e) { toast(e.message, 'error'); } }
-    async function showLogs(id) { try { const d = await api(`/api/proxies/${id}/logs?tail=100`); document.getElementById('logsContent').textContent = d.logs || 'No logs'; document.getElementById('logsModal').classList.add('active'); } catch (e) { toast(e.message, 'error'); } }
+    async function deleteProxy(id) { if (!confirm(t('confirm_delete_proxy'))) return; try { await api(`/api/proxies/${id}`, { method: 'DELETE' }); toast(t('toast_proxy_deleted')); loadProxies(); } catch (e) { toast(e.message, 'error'); } }
+    const proxyActionToast = { start: 'toast_proxy_started', stop: 'toast_proxy_stopped', restart: 'toast_proxy_restarted' };
+    async function proxyAction(id, action) {
+        try {
+            await api(`/api/proxies/${id}/${action}`, { method: 'POST' });
+            toast(t(proxyActionToast[action]));
+            loadProxies();
+        } catch (e) { toast(e.message, 'error'); }
+    }
+    async function showLogs(id) { try { const d = await api(`/api/proxies/${id}/logs?tail=100`); document.getElementById('logsContent').textContent = d.logs || t('no_logs'); document.getElementById('logsModal').classList.add('active'); } catch (e) { toast(e.message, 'error'); } }
 
     async function addClient() {
         const proxyId = document.getElementById('clientProxyId').value;
@@ -301,15 +319,14 @@
                 traffic_limit: parseInt(document.getElementById('clientTrafficLimit').value),
                 expiry_time: parseInt(document.getElementById('clientExpiry').value),
             })});
-            hideModal('addClientModal'); toast('Client added'); loadProxies();
+            hideModal('addClientModal'); toast(t('toast_client_added')); loadProxies();
         } catch (e) { toast(e.message, 'error'); }
     }
 
-    async function toggleClient(pid, cid, enable) { try { await api(`/api/proxies/${pid}/clients/${cid}`, { method: 'PUT', body: JSON.stringify({ enabled: enable }) }); toast(enable ? 'Enabled' : 'Disabled'); const m = proxyMeta[pid]||{}; loadClients(pid, m.backend, m.running); } catch (e) { toast(e.message, 'error'); } }
-    async function resetTraffic(pid, cid) { try { await api(`/api/proxies/${pid}/clients/${cid}/reset-traffic`, { method: 'POST' }); toast('Traffic reset'); const m = proxyMeta[pid]||{}; loadClients(pid, m.backend, m.running); } catch (e) { toast(e.message, 'error'); } }
-    async function deleteClient(pid, cid) { if (!confirm('Delete this client?')) return; try { await api(`/api/proxies/${pid}/clients/${cid}`, { method: 'DELETE' }); toast('Deleted'); const m = proxyMeta[pid]||{}; loadClients(pid, m.backend, m.running); } catch (e) { toast(e.message, 'error'); } }
+    async function toggleClient(pid, cid, enable) { try { await api(`/api/proxies/${pid}/clients/${cid}`, { method: 'PUT', body: JSON.stringify({ enabled: enable }) }); toast(enable ? t('toast_enabled') : t('toast_disabled')); const m = proxyMeta[pid]||{}; loadClients(pid, m.backend, m.running); } catch (e) { toast(e.message, 'error'); } }
+    async function resetTraffic(pid, cid) { try { await api(`/api/proxies/${pid}/clients/${cid}/reset-traffic`, { method: 'POST' }); toast(t('toast_traffic_reset')); const m = proxyMeta[pid]||{}; loadClients(pid, m.backend, m.running); } catch (e) { toast(e.message, 'error'); } }
+    async function deleteClient(pid, cid) { if (!confirm(t('confirm_delete_client'))) return; try { await api(`/api/proxies/${pid}/clients/${cid}`, { method: 'DELETE' }); toast(t('toast_deleted')); const m = proxyMeta[pid]||{}; loadClients(pid, m.backend, m.running); } catch (e) { toast(e.message, 'error'); } }
 
-    // Initial load + refresh every 10s
     async function refresh() { await loadProxies(); await fetchLiveData(); await loadProxies(); }
     refresh();
     setInterval(refresh, 10000);

@@ -1,6 +1,6 @@
 {{define "dashboard.html"}}
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en" data-i18n-title="page_title_dashboard">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,30 +12,37 @@
     <div id="toast" class="toast"></div>
 
     <div class="sidebar">
-        <div class="sidebar-brand"><i class="fas fa-paper-plane"></i><div><div class="name">MTProxy Panel</div><div class="ver">v1.1.0</div></div></div>
+        <div class="sidebar-brand"><i class="fas fa-paper-plane"></i><div><div class="name" data-i18n="app_name"></div><div class="ver">v1.2.0</div></div></div>
         <nav>
-            <a href="/panel" class="active"><i class="fas fa-chart-line"></i> Dashboard</a>
-            <a href="/panel/proxies"><i class="fas fa-server"></i> Proxies</a>
-            <a href="/panel/settings"><i class="fas fa-cog"></i> Settings</a>
+            <a href="/panel" class="active"><i class="fas fa-chart-line"></i> <span data-i18n="nav_dashboard"></span></a>
+            <a href="/panel/proxies"><i class="fas fa-server"></i> <span data-i18n="nav_proxies"></span></a>
+            <a href="/panel/settings"><i class="fas fa-cog"></i> <span data-i18n="nav_settings"></span></a>
         </nav>
-        <div class="sidebar-footer"><a href="#" onclick="logout()"><i class="fas fa-sign-out-alt mr-2"></i>Logout</a></div>
+        <div class="sidebar-footer">
+            <div class="lang-switcher">
+                <button onclick="setLang('en')" class="lang-btn" data-lang="en">EN</button>
+                <button onclick="setLang('ru')" class="lang-btn" data-lang="ru">RU</button>
+                <button onclick="setLang('zh')" class="lang-btn" data-lang="zh">ZH</button>
+            </div>
+            <a href="#" onclick="logout()"><i class="fas fa-sign-out-alt mr-2"></i><span data-i18n="btn_logout"></span></a>
+        </div>
     </div>
 
     <div class="main">
-        <h1 class="page-title">Dashboard</h1>
-        <p class="page-sub">System overview and proxy statistics</p>
+        <h1 class="page-title" data-i18n="dashboard_title"></h1>
+        <p class="page-sub" data-i18n="dashboard_subtitle"></p>
 
         <div class="grid grid-4 mb-6">
             <div class="card">
                 <div class="flex items-center justify-between mb-2">
-                    <span class="stat-label">CPU</span><i class="fas fa-microchip" style="color:var(--accent)"></i>
+                    <span class="stat-label" data-i18n="stat_cpu"></span><i class="fas fa-microchip" style="color:var(--accent)"></i>
                 </div>
                 <div class="stat-value" id="cpu-percent">--%</div>
                 <div class="progress-bar"><div class="progress-bar-fill" id="cpu-bar" style="width:0%;background:var(--accent)"></div></div>
             </div>
             <div class="card">
                 <div class="flex items-center justify-between mb-2">
-                    <span class="stat-label">Memory</span><i class="fas fa-memory" style="color:var(--warning)"></i>
+                    <span class="stat-label" data-i18n="stat_memory"></span><i class="fas fa-memory" style="color:var(--warning)"></i>
                 </div>
                 <div class="stat-value" id="mem-percent">--%</div>
                 <div class="progress-bar"><div class="progress-bar-fill" id="mem-bar" style="width:0%;background:var(--warning)"></div></div>
@@ -43,7 +50,7 @@
             </div>
             <div class="card">
                 <div class="flex items-center justify-between mb-2">
-                    <span class="stat-label">Disk</span><i class="fas fa-hdd" style="color:var(--success)"></i>
+                    <span class="stat-label" data-i18n="stat_disk"></span><i class="fas fa-hdd" style="color:var(--success)"></i>
                 </div>
                 <div class="stat-value" id="disk-percent">--%</div>
                 <div class="progress-bar"><div class="progress-bar-fill" id="disk-bar" style="width:0%;background:var(--success)"></div></div>
@@ -51,7 +58,7 @@
             </div>
             <div class="card">
                 <div class="flex items-center justify-between mb-2">
-                    <span class="stat-label">Uptime</span><i class="fas fa-clock" style="color:var(--text-secondary)"></i>
+                    <span class="stat-label" data-i18n="stat_uptime"></span><i class="fas fa-clock" style="color:var(--text-secondary)"></i>
                 </div>
                 <div class="stat-value" id="uptime" style="font-size:22px">--</div>
                 <div class="stat-label mt-2" id="hostname"></div>
@@ -61,13 +68,13 @@
         <div class="grid grid-2 mb-6">
             <div class="card">
                 <div class="flex items-center justify-between mb-2">
-                    <span class="stat-label">Network Sent</span><i class="fas fa-arrow-up" style="color:var(--success)"></i>
+                    <span class="stat-label" data-i18n="stat_net_sent"></span><i class="fas fa-arrow-up" style="color:var(--success)"></i>
                 </div>
                 <div class="stat-value" id="net-sent">--</div>
             </div>
             <div class="card">
                 <div class="flex items-center justify-between mb-2">
-                    <span class="stat-label">Network Received</span><i class="fas fa-arrow-down" style="color:var(--accent)"></i>
+                    <span class="stat-label" data-i18n="stat_net_recv"></span><i class="fas fa-arrow-down" style="color:var(--accent)"></i>
                 </div>
                 <div class="stat-value" id="net-recv">--</div>
             </div>
@@ -75,15 +82,19 @@
 
         <div class="card">
             <div class="flex items-center justify-between mb-4">
-                <h2 class="text-lg font-bold">Proxies</h2>
-                <a href="/panel/proxies" class="btn btn-outline btn-sm">Manage <i class="fas fa-arrow-right ml-3"></i></a>
+                <h2 class="text-lg font-bold" data-i18n="proxies_section_title"></h2>
+                <a href="/panel/proxies" class="btn btn-outline btn-sm"><span data-i18n="btn_manage"></span> <i class="fas fa-arrow-right ml-3"></i></a>
             </div>
-            <div id="proxies-summary"><p style="color:var(--text-secondary)">Loading...</p></div>
+            <div id="proxies-summary"><p style="color:var(--text-secondary)" data-i18n="loading"></p></div>
         </div>
     </div>
 
+    <script src="/static/js/i18n.js"></script>
     <script src="/static/js/app.js"></script>
     <script>
+    applyI18n();
+    function onLangChange() { applyI18n(); loadStatus(); loadProxiesSummary(); }
+
     async function loadStatus() {
         try {
             const s = await api('/api/system/status');
@@ -107,14 +118,14 @@
             const proxies = await api('/api/proxies');
             const el = document.getElementById('proxies-summary');
             if (proxies.length === 0) {
-                el.innerHTML = '<p style="color:var(--text-secondary)">No proxies configured. <a href="/panel/proxies" style="color:var(--accent)">Create one</a></p>';
+                el.innerHTML = `<p style="color:var(--text-secondary)">${t('no_proxies_message')} <a href="/panel/proxies" style="color:var(--accent)">${t('no_proxies_create_link')}</a></p>`;
                 return;
             }
-            let html = '<table><thead><tr><th>Name</th><th>Port</th><th>Status</th><th>Clients</th><th>Traffic</th></tr></thead><tbody>';
+            let html = `<table><thead><tr><th>${t('table_header_name')}</th><th>${t('table_header_port')}</th><th>${t('table_header_status')}</th><th>${t('table_header_clients')}</th><th>${t('table_header_traffic')}</th></tr></thead><tbody>`;
             for (const p of proxies) {
                 const badge = p.status.running
-                    ? '<span class="badge badge-success">Running</span>'
-                    : '<span class="badge badge-danger">Stopped</span>';
+                    ? `<span class="badge badge-success">${t('status_running')}</span>`
+                    : `<span class="badge badge-danger">${t('status_stopped')}</span>`;
                 html += `<tr><td class="font-medium">${p.name}</td><td>${p.port}</td><td>${badge}</td><td>${p.client_count}</td><td>${formatBytes(p.traffic_up + p.traffic_down)}</td></tr>`;
             }
             html += '</tbody></table>';

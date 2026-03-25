@@ -1,6 +1,6 @@
 {{define "settings.html"}}
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en" data-i18n-title="page_title_settings">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -41,27 +41,34 @@
     <div id="toast" class="toast"></div>
 
     <div class="sidebar">
-        <div class="sidebar-brand"><i class="fas fa-paper-plane"></i><div><div class="name">MTProxy Panel</div><div class="ver">v1.2.0</div></div></div>
+        <div class="sidebar-brand"><i class="fas fa-paper-plane"></i><div><div class="name" data-i18n="app_name"></div><div class="ver">v1.2.0</div></div></div>
         <nav>
-            <a href="/panel"><i class="fas fa-chart-line"></i> Dashboard</a>
-            <a href="/panel/proxies"><i class="fas fa-server"></i> Proxies</a>
-            <a href="/panel/settings" class="active"><i class="fas fa-cog"></i> Settings</a>
+            <a href="/panel"><i class="fas fa-chart-line"></i> <span data-i18n="nav_dashboard"></span></a>
+            <a href="/panel/proxies"><i class="fas fa-server"></i> <span data-i18n="nav_proxies"></span></a>
+            <a href="/panel/settings" class="active"><i class="fas fa-cog"></i> <span data-i18n="nav_settings"></span></a>
         </nav>
-        <div class="sidebar-footer"><a href="#" onclick="logout()"><i class="fas fa-sign-out-alt mr-2"></i>Logout</a></div>
+        <div class="sidebar-footer">
+            <div class="lang-switcher">
+                <button onclick="setLang('en')" class="lang-btn" data-lang="en">EN</button>
+                <button onclick="setLang('ru')" class="lang-btn" data-lang="ru">RU</button>
+                <button onclick="setLang('zh')" class="lang-btn" data-lang="zh">ZH</button>
+            </div>
+            <a href="#" onclick="logout()"><i class="fas fa-sign-out-alt mr-2"></i><span data-i18n="btn_logout"></span></a>
+        </div>
     </div>
 
     <div class="main">
-        <h1 class="page-title">Settings</h1>
-        <p class="page-sub">Panel configuration and account settings</p>
+        <h1 class="page-title" data-i18n="settings_title"></h1>
+        <p class="page-sub" data-i18n="settings_subtitle"></p>
 
         <!-- Backend Selection -->
         <div class="card mb-6">
-            <h3 class="font-bold text-lg mb-2"><i class="fas fa-microchip mr-2"></i>Proxy Engine</h3>
-            <p class="mb-4" style="color:var(--text-secondary);font-size:13px">Choose which MTProto proxy engine to use for new proxies</p>
+            <h3 class="font-bold text-lg mb-2"><i class="fas fa-microchip mr-2"></i><span data-i18n="settings_engine_title"></span></h3>
+            <p class="mb-4" style="color:var(--text-secondary);font-size:13px" data-i18n="settings_engine_desc"></p>
             <div id="backendCards" class="backend-cards"></div>
             <div class="mt-4" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-                <button class="btn btn-primary" onclick="saveBackend()"><i class="fas fa-save mr-1"></i> Apply Engine</button>
-                <button class="btn btn-outline" onclick="pullImage()"><i class="fas fa-download mr-1"></i> Pull Image</button>
+                <button class="btn btn-primary" onclick="saveBackend()"><i class="fas fa-save mr-1"></i> <span data-i18n="btn_apply_engine"></span></button>
+                <button class="btn btn-outline" onclick="pullImage()"><i class="fas fa-download mr-1"></i> <span data-i18n="btn_pull_image"></span></button>
                 <span id="backendStatus" style="color:var(--text-secondary);font-size:13px"></span>
                 <span id="pullStatus" style="color:var(--text-secondary);font-size:13px"></span>
             </div>
@@ -69,64 +76,62 @@
 
         <!-- Change Password -->
         <div class="card mb-6">
-            <h3 class="font-bold text-lg mb-4"><i class="fas fa-lock mr-2"></i>Change Password</h3>
+            <h3 class="font-bold text-lg mb-4"><i class="fas fa-lock mr-2"></i><span data-i18n="settings_password_title"></span></h3>
             <div class="grid grid-2">
-                <div><label>Current Password</label><input type="password" id="oldPassword"></div>
-                <div><label>New Password</label><input type="password" id="newPassword"></div>
+                <div><label data-i18n="label_current_password"></label><input type="password" id="oldPassword"></div>
+                <div><label data-i18n="label_new_password"></label><input type="password" id="newPassword"></div>
             </div>
-            <button class="btn btn-primary mt-4" onclick="changePassword()"><i class="fas fa-save mr-1"></i> Update Password</button>
+            <button class="btn btn-primary mt-4" onclick="changePassword()"><i class="fas fa-save mr-1"></i> <span data-i18n="btn_update_password"></span></button>
         </div>
 
         <!-- SSL / Domain -->
         <div class="card mb-6">
-            <h3 class="font-bold text-lg mb-4"><i class="fas fa-shield-alt mr-2"></i>SSL Certificate</h3>
-            <p class="mb-3" style="color:var(--text-secondary);font-size:13px">
-                Specify your domain to automatically obtain a Let's Encrypt SSL certificate.
-                Requires ports 80 and 443 to be open. <strong>Restart required</strong> after changing.
-            </p>
+            <h3 class="font-bold text-lg mb-4"><i class="fas fa-shield-alt mr-2"></i><span data-i18n="settings_ssl_title"></span></h3>
+            <p class="mb-3" style="color:var(--text-secondary);font-size:13px" data-i18n-html="settings_ssl_desc"></p>
             <div class="grid grid-2">
-                <div><label>Panel Domain (e.g. panel.example.com)</label><input type="text" id="setting-panel_domain" placeholder="leave empty for HTTP"></div>
+                <div><label data-i18n="label_panel_domain"></label><input type="text" id="setting-panel_domain" data-i18n-placeholder="placeholder_panel_domain"></div>
             </div>
-            <button class="btn btn-primary mt-4" onclick="saveSettings()"><i class="fas fa-save mr-1"></i> Save & Restart Required</button>
+            <button class="btn btn-primary mt-4" onclick="saveSettings()"><i class="fas fa-save mr-1"></i> <span data-i18n="btn_save_restart"></span></button>
         </div>
 
         <!-- Panel Settings -->
         <div class="card mb-6">
-            <h3 class="font-bold text-lg mb-4"><i class="fas fa-sliders-h mr-2"></i>Panel Settings</h3>
+            <h3 class="font-bold text-lg mb-4"><i class="fas fa-sliders-h mr-2"></i><span data-i18n="settings_panel_title"></span></h3>
             <div class="grid grid-2">
-                <div><label>Server IP (for tg:// links)</label><input type="text" id="setting-server_ip" placeholder="auto-detect"></div>
+                <div><label data-i18n="label_server_ip"></label><input type="text" id="setting-server_ip" data-i18n-placeholder="placeholder_server_ip"></div>
             </div>
-            <button class="btn btn-primary mt-4" onclick="saveSettings()"><i class="fas fa-save mr-1"></i> Save Settings</button>
+            <button class="btn btn-primary mt-4" onclick="saveSettings()"><i class="fas fa-save mr-1"></i> <span data-i18n="btn_save_settings"></span></button>
         </div>
 
         <!-- Telegram Bot -->
         <div class="card mb-6">
-            <h3 class="font-bold text-lg mb-4"><i class="fab fa-telegram mr-2"></i>Telegram Bot</h3>
-            <p class="mb-3" style="color:var(--text-secondary);font-size:13px">
-                Create a bot via <a href="https://t.me/BotFather" target="_blank" style="color:var(--accent)">@BotFather</a>,
-                paste the token below and specify admin Telegram IDs (comma-separated). The panel will launch the bot automatically.
-            </p>
+            <h3 class="font-bold text-lg mb-4"><i class="fab fa-telegram mr-2"></i><span data-i18n="settings_bot_title"></span></h3>
+            <p class="mb-3" style="color:var(--text-secondary);font-size:13px" data-i18n-html="settings_bot_desc"></p>
             <div class="grid grid-2">
-                <div><label>Bot Token (from @BotFather)</label><input type="text" id="setting-tg_bot_token" placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"></div>
-                <div><label>Admin Telegram IDs (comma-separated)</label><input type="text" id="setting-tg_admin_ids" placeholder="123456789,987654321"></div>
+                <div><label data-i18n="label_bot_token"></label><input type="text" id="setting-tg_bot_token" data-i18n-placeholder="placeholder_bot_token"></div>
+                <div><label data-i18n="label_admin_ids"></label><input type="text" id="setting-tg_admin_ids" data-i18n-placeholder="placeholder_admin_ids"></div>
             </div>
             <div class="mt-4" style="display:flex;align-items:center;gap:12px;">
-                <button class="btn btn-primary" onclick="saveBotSettings()"><i class="fas fa-save mr-1"></i> Save</button>
-                <button class="btn btn-outline" id="botStartBtn" onclick="toggleBot()"><i class="fas fa-play mr-1"></i> Start Bot</button>
+                <button class="btn btn-primary" onclick="saveBotSettings()"><i class="fas fa-save mr-1"></i> <span data-i18n="btn_save"></span></button>
+                <button class="btn btn-outline" id="botStartBtn" onclick="toggleBot()"><i class="fas fa-play mr-1"></i> <span data-i18n="btn_start_bot"></span></button>
                 <span id="botStatus" style="font-size:13px;color:var(--text-secondary)"></span>
             </div>
         </div>
 
         <!-- About -->
         <div class="card">
-            <h3 class="font-bold text-lg mb-2"><i class="fas fa-info-circle mr-2"></i>About</h3>
-            <p style="color:var(--text-secondary)">MTProxy Panel v1.2.0<br>MTProto Proxy management panel inspired by 3x-ui.<br>Built with Go + Gin + SQLite.</p>
+            <h3 class="font-bold text-lg mb-2"><i class="fas fa-info-circle mr-2"></i><span data-i18n="settings_about_title"></span></h3>
+            <p style="color:var(--text-secondary)" data-i18n-html="settings_about_text"></p>
         </div>
     </div>
 
+    <script src="/static/js/i18n.js"></script>
     <script src="/static/js/app.js"></script>
     <script>
+    applyI18n();
     let selectedBackend = 'official';
+
+    function onLangChange() { applyI18n(); loadBackends(); loadBotStatus(); }
 
     async function loadBackends() {
         try {
@@ -145,14 +150,14 @@
                 b.features.forEach(f => {
                     const cls = f.supported ? 'yes' : 'no';
                     const icon = f.supported ? 'fa-check' : 'fa-times';
-                    featuresHTML += `<li class="${cls}"><span class="feature-icon"><i class="fas ${icon}"></i></span>${f.name}</li>`;
+                    featuresHTML += `<li class="${cls}"><span class="feature-icon"><i class="fas ${icon}"></i></span>${t(f.name)}</li>`;
                 });
 
                 card.innerHTML = `
                     <div class="check-mark"><i class="fas fa-check"></i></div>
                     <h4>${b.name}</h4>
                     <span class="backend-lang ${langClass}">${b.lang}</span>
-                    <p class="backend-desc">${b.description}</p>
+                    <p class="backend-desc">${t(b.description)}</p>
                     <div class="backend-image">Docker: <code>${b.image}</code></div>
                     <ul class="feature-list">${featuresHTML}</ul>
                 `;
@@ -172,8 +177,8 @@
         const status = document.getElementById('backendStatus');
         try {
             await api('/api/settings', { method: 'POST', body: JSON.stringify({ proxy_backend: selectedBackend }) });
-            status.textContent = 'Saved!';
-            toast('Proxy engine updated');
+            status.textContent = t('saved_status');
+            toast(t('toast_engine_saved'));
             setTimeout(() => status.textContent = '', 3000);
         } catch (e) { toast(e.message, 'error'); }
     }
@@ -193,7 +198,7 @@
         document.querySelectorAll('[id^="setting-"]').forEach(el => {
             data[el.id.replace('setting-', '')] = el.value;
         });
-        try { await api('/api/settings', { method: 'POST', body: JSON.stringify(data) }); toast('Settings saved'); } catch (e) { toast(e.message, 'error'); }
+        try { await api('/api/settings', { method: 'POST', body: JSON.stringify(data) }); toast(t('toast_settings_saved')); } catch (e) { toast(e.message, 'error'); }
     }
 
     async function changePassword() {
@@ -202,7 +207,7 @@
                 old_password: document.getElementById('oldPassword').value,
                 new_password: document.getElementById('newPassword').value,
             })});
-            toast('Password updated');
+            toast(t('toast_password_updated'));
             document.getElementById('oldPassword').value = '';
             document.getElementById('newPassword').value = '';
         } catch (e) { toast(e.message, 'error'); }
@@ -210,8 +215,8 @@
 
     async function pullImage() {
         const s = document.getElementById('pullStatus');
-        s.textContent = 'Pulling...';
-        try { await api('/api/pull-image', { method: 'POST' }); s.textContent = 'Done!'; toast('Image pulled'); } catch (e) { s.textContent = 'Failed'; toast(e.message, 'error'); }
+        s.textContent = t('pulling_status');
+        try { await api('/api/pull-image', { method: 'POST' }); s.textContent = t('pull_done_status'); toast(t('toast_image_pulled')); } catch (e) { s.textContent = t('pull_failed_status'); toast(e.message, 'error'); }
     }
 
     async function saveBotSettings() {
@@ -221,21 +226,19 @@
         };
         try {
             await api('/api/settings', { method: 'POST', body: JSON.stringify(data) });
-            toast('Bot settings saved');
+            toast(t('toast_bot_settings_saved'));
         } catch (e) { toast(e.message, 'error'); }
     }
 
     async function toggleBot() {
-        const status = document.getElementById('botStatus');
-        const btn = document.getElementById('botStartBtn');
         try {
             const res = await api('/api/bot/status');
             if (res.running) {
                 await api('/api/bot/stop', { method: 'POST' });
-                toast('Bot stopped');
+                toast(t('toast_bot_stopped'));
             } else {
                 await api('/api/bot/start', { method: 'POST' });
-                toast('Bot started');
+                toast(t('toast_bot_started'));
             }
             setTimeout(loadBotStatus, 500);
         } catch (e) { toast(e.message, 'error'); }
@@ -247,20 +250,20 @@
         try {
             const res = await api('/api/bot/status');
             if (res.running) {
-                btn.innerHTML = '<i class="fas fa-stop mr-1"></i> Stop Bot';
+                btn.innerHTML = `<i class="fas fa-stop mr-1"></i> ${t('btn_stop_bot')}`;
                 btn.className = 'btn btn-outline';
                 btn.style.borderColor = 'var(--danger)';
                 btn.style.color = 'var(--danger)';
-                status.innerHTML = '<span style="color:var(--success)">Running</span>';
+                status.innerHTML = `<span style="color:var(--success)">${t('bot_status_running')}</span>`;
             } else {
-                btn.innerHTML = '<i class="fas fa-play mr-1"></i> Start Bot';
+                btn.innerHTML = `<i class="fas fa-play mr-1"></i> ${t('btn_start_bot')}`;
                 btn.className = 'btn btn-outline';
                 btn.style.borderColor = '';
                 btn.style.color = '';
-                status.innerHTML = res.error ? `<span style="color:var(--danger)">${res.error}</span>` : 'Stopped';
+                status.innerHTML = res.error ? `<span style="color:var(--danger)">${res.error}</span>` : t('bot_status_stopped');
             }
         } catch (e) {
-            status.textContent = 'Unknown';
+            status.textContent = t('bot_status_unknown');
         }
     }
 
