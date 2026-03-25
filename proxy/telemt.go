@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	telemtImage   = "whn0thacked/telemt-docker:latest"
+	telemtImage   = "telemt-local"
 	telemtAPIPort = 9091
 	telemtMetrics = 9090
 )
@@ -134,9 +134,9 @@ func (b *TelemtBackend) BuildRunArgs(containerName string, port int, secrets []s
 		"run", "-d",
 		"--name", containerName,
 		"--restart", "unless-stopped",
-		"--cap-drop", "ALL",
-		"--cap-add", "NET_BIND_SERVICE",
+		"--user", "root",
 		"--ulimit", "nofile=65536:65536",
+		"-e", "RUST_LOG=info",
 		"-p", fmt.Sprintf("%d:443", port),
 		"-p", fmt.Sprintf("%d:%d", TelemtAPIPort(port), telemtAPIPort),
 		"-p", fmt.Sprintf("%d:%d", TelemtMetricsPort(port), telemtMetrics),
@@ -148,7 +148,8 @@ func (b *TelemtBackend) BuildRunArgs(containerName string, port int, secrets []s
 }
 
 func (b *TelemtBackend) PullImage() error {
-	return exec.Command("docker", "pull", telemtImage).Run()
+	// Build from upstream source (pre-built image has UPX issues on some kernels)
+	return exec.Command("docker", "build", "-t", telemtImage, "https://github.com/telemt/telemt.git").Run()
 }
 
 // ── UserManager interface ───────────────────────────────────────────────
