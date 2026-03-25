@@ -98,7 +98,12 @@ func GetServerIP() string {
 	return detectExternalIP()
 }
 
+var cachedExternalIP string
+
 func detectExternalIP() string {
+	if cachedExternalIP != "" {
+		return cachedExternalIP
+	}
 	client := &http.Client{Timeout: 3 * time.Second}
 	for _, url := range []string{"https://ifconfig.me/ip", "https://api.ipify.org", "https://icanhazip.com"} {
 		resp, err := client.Get(url)
@@ -108,6 +113,7 @@ func detectExternalIP() string {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if ip := strings.TrimSpace(string(body)); ip != "" {
+			cachedExternalIP = ip
 			return ip
 		}
 	}

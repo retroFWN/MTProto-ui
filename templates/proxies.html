@@ -119,6 +119,7 @@
     applyI18n();
     let liveData = {};
     let proxyMeta = {};
+    let initialized = false;
 
     function onLangChange() { applyI18n(); refresh(); }
 
@@ -191,7 +192,7 @@
                             <h4 class="font-bold">${t('clients_count', {count: p.client_count})}</h4>
                             <button class="btn btn-outline btn-sm" onclick="showAddClientModal(${p.id})"><i class="fas fa-plus mr-1"></i>${t('btn_add_client')}</button>
                         </div>
-                        <div id="clients-${p.id}"><p class="text-sm" style="color:var(--text-secondary)">${t('loading')}</p></div>
+                        <div id="clients-${p.id}">${initialized ? '' : `<p class="text-sm" style="color:var(--text-secondary)">${t('loading')}</p>`}</div>
                     </div>
                 </div>`;
             }
@@ -200,6 +201,7 @@
                 proxyMeta[p.id] = { backend: p.backend, running: p.status.running };
                 loadClients(p.id, p.backend, p.status.running);
             }
+            initialized = true;
         } catch (e) { console.error(e); }
     }
 
