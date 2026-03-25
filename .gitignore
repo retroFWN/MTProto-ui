@@ -5,9 +5,6 @@ mtproxy-panel.exe
 # Data (secrets, database)
 data/
 
-# Go
-go.sum
-
 # Python
 __pycache__/
 *.pyc
