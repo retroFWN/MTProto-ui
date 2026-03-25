@@ -1,7 +1,10 @@
 package database
 
 import (
+	"io"
 	"log"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/glebarez/sqlite"
@@ -91,6 +94,22 @@ func GetServerIP() string {
 	var s Setting
 	if DB.Where("`key` = ?", "server_ip").First(&s).Error == nil && s.Value != "" {
 		return s.Value
+	}
+	return detectExternalIP()
+}
+
+func detectExternalIP() string {
+	client := &http.Client{Timeout: 3 * time.Second}
+	for _, url := range []string{"https://ifconfig.me/ip", "https://api.ipify.org", "https://icanhazip.com"} {
+		resp, err := client.Get(url)
+		if err != nil {
+			continue
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if ip := strings.TrimSpace(string(body)); ip != "" {
+			return ip
+		}
 	}
 	return "YOUR_SERVER_IP"
 }
