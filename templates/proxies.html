@@ -327,7 +327,7 @@
     async function resetTraffic(pid, cid) { try { await api(`/api/proxies/${pid}/clients/${cid}/reset-traffic`, { method: 'POST' }); toast(t('toast_traffic_reset')); const m = proxyMeta[pid]||{}; loadClients(pid, m.backend, m.running); } catch (e) { toast(e.message, 'error'); } }
     async function deleteClient(pid, cid) { if (!confirm(t('confirm_delete_client'))) return; try { await api(`/api/proxies/${pid}/clients/${cid}`, { method: 'DELETE' }); toast(t('toast_deleted')); const m = proxyMeta[pid]||{}; loadClients(pid, m.backend, m.running); } catch (e) { toast(e.message, 'error'); } }
 
-    async function refresh() { await loadProxies(); await fetchLiveData(); await loadProxies(); }
+    async function refresh() { await fetchLiveData(); await loadProxies(); }
     refresh();
     setInterval(refresh, 10000);
     </script>
