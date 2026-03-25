@@ -3,7 +3,6 @@ package proxy
 import (
 	"fmt"
 	"os/exec"
-	"strings"
 )
 
 // OfficialBackend wraps the official telegrammessenger/proxy (C).
@@ -31,25 +30,17 @@ func (b *OfficialBackend) Info() BackendInfo {
 	}
 }
 
-// stripEE removes the "ee"/"dd" prefix — the official proxy expects raw 32-hex secrets.
-func stripEE(s string) string {
-	if len(s) > 2 && (strings.HasPrefix(s, "ee") || strings.HasPrefix(s, "dd")) {
-		return s[2:]
-	}
-	return s
-}
-
 func (b *OfficialBackend) BuildRunArgs(containerName string, port int, secrets []string, domain string) []string {
 	args := []string{
 		"run", "-d",
 		"--name", containerName,
 		"--restart", "unless-stopped",
 		"-p", fmt.Sprintf("%d:443", port),
-		"-e", fmt.Sprintf("SECRET=%s", stripEE(secrets[0])),
+		"-e", fmt.Sprintf("SECRET=%s", secrets[0]),
 		"telegrammessenger/proxy",
 	}
 	for _, s := range secrets[1:] {
-		args = append(args, "-S", stripEE(s))
+		args = append(args, "-S", s)
 	}
 	return args
 }

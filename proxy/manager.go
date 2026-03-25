@@ -24,14 +24,14 @@ func ContainerName(proxyID uint) string {
 
 func GenerateSecret(fakeTLSDomain string) string {
 	domainHex := hex.EncodeToString([]byte(fakeTLSDomain))
-	// ee (2) + 32 hex chars = 34 chars (standard MTProto FakeTLS secret)
-	needed := 32 - len(domainHex)
+	// ee (2) + 30 hex = 32 chars total — proxy expects exactly 32 hex chars
+	needed := 30 - len(domainHex)
 	if needed > 0 {
 		randBytes := make([]byte, (needed+1)/2)
 		rand.Read(randBytes)
 		return "ee" + domainHex + hex.EncodeToString(randBytes)[:needed]
 	}
-	return "ee" + domainHex[:32]
+	return "ee" + domainHex[:30]
 }
 
 // ── Container lifecycle ──────────────────────────────────────────────────
