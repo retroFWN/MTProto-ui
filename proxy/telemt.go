@@ -108,15 +108,27 @@ func generateConfigTOML(secrets []string, domain string) string {
 	return sb.String()
 }
 
+// DataHostPath is the host-side path to the data directory.
+// Set via DATA_HOST_PATH env when running inside Docker (DinD via socket).
+var DataHostPath string
+
 func (b *TelemtBackend) BuildRunArgs(containerName string, port int, secrets []string, domain string) []string {
-	// Generate config.toml and write to temp directory
+	// Generate config and write to data directory
 	configDir := filepath.Join("data", "telemt", containerName)
 	os.MkdirAll(configDir, 0755)
 	configPath := filepath.Join(configDir, "telemt.toml")
 	configContent := generateConfigTOML(secrets, domain)
 	os.WriteFile(configPath, []byte(configContent), 0644)
 
-	absConfigDir, _ := filepath.Abs(configDir)
+	// Resolve the volume mount path for the host
+	var hostConfigDir string
+	if DataHostPath != "" {
+		// Running in Docker: use the known host path
+		hostConfigDir = filepath.Join(DataHostPath, "telemt", containerName)
+	} else {
+		// Running directly on host
+		hostConfigDir, _ = filepath.Abs(configDir)
+	}
 
 	args := []string{
 		"run", "-d",
@@ -128,7 +140,7 @@ func (b *TelemtBackend) BuildRunArgs(containerName string, port int, secrets []s
 		"-p", fmt.Sprintf("%d:443", port),
 		"-p", fmt.Sprintf("%d:%d", TelemtAPIPort(port), telemtAPIPort),
 		"-p", fmt.Sprintf("%d:%d", TelemtMetricsPort(port), telemtMetrics),
-		"-v", fmt.Sprintf("%s:/etc/telemt", absConfigDir),
+		"-v", fmt.Sprintf("%s:/etc/telemt", hostConfigDir),
 		telemtImage,
 		"/etc/telemt/telemt.toml",
 	}

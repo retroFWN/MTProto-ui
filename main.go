@@ -22,6 +22,7 @@ func main() {
 	database.Seed(cfg.DefaultUser, cfg.DefaultPass)
 	proxy.ContainerPfx = cfg.ContainerPfx
 	proxy.DockerHostIP = cfg.DockerHostIP
+	proxy.DataHostPath = cfg.DataHostPath
 
 	// Background tasks
 	go proxy.TrafficCollector(cfg.StatsInterval)
