@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -24,15 +23,12 @@ func ContainerName(proxyID uint) string {
 
 func GenerateSecret(fakeTLSDomain string) string {
 	domainHex := hex.EncodeToString([]byte(fakeTLSDomain))
-	// Total: ee (2) + 30 hex chars = 32 chars
-	needed := 30 - len(domainHex)
+	// ee (2) + 32 hex chars = 34 chars (standard MTProto FakeTLS secret)
+	needed := 32 - len(domainHex)
 	if needed > 0 {
-		randBytes := make([]byte, 15)
-		rand.Read(randBytes)
-		randHex := hex.EncodeToString(randBytes)[:needed]
-		return "ee" + domainHex + randHex
+		return "ee" + domainHex + strings.Repeat("0", needed)
 	}
-	return "ee" + domainHex[:30]
+	return "ee" + domainHex[:32]
 }
 
 // ── Container lifecycle ──────────────────────────────────────────────────
@@ -150,7 +146,6 @@ func GetContainerLogs(proxyID uint, tail int) string {
 
 func ParseNetBytes(s string) int64 {
 	s = strings.TrimSpace(strings.ToUpper(s))
-	// Ordered longest-suffix-first to avoid "GB" matching "B"
 	suffixes := []struct {
 		suffix string
 		mult   float64
@@ -185,53 +180,72 @@ func TrafficCollector(intervalSec int) {
 		var proxies []database.Proxy
 		database.DB.Where("enabled = ?", true).Find(&proxies)
 
-		for _, p := range proxies {
+		for i := range proxies {
+			p := &proxies[i]
 			backend := GetBackend(p.Backend)
 
-			// If backend supports per-user stats (telemt), use its API
 			if um, ok := backend.(UserManager); ok {
 				users, err := um.ListUsers(p.Port)
 				if err != nil {
-					// Fallback to docker stats
-					collectDockerStats(&p)
+					collectDockerStats(p)
 					continue
 				}
 
-				var totalOctets int64
-				// Update per-client traffic from telemt live data
 				var clients []database.Client
 				database.DB.Where("proxy_id = ?", p.ID).Find(&clients)
 
-				for _, cl := range clients {
+				var totalDeltaDown, totalDeltaUp int64
+				for j := range clients {
+					cl := &clients[j]
 					for _, u := range users {
 						if MatchSecret(cl.Secret, u.Secret) {
-							// total_octets is bidirectional — split evenly as approximation
-							half := u.TotalOctets / 2
-							database.DB.Model(&cl).Updates(map[string]interface{}{
-								"traffic_down": half,
-								"traffic_up":   u.TotalOctets - half,
+							deltaOctets := u.TotalOctets - cl.LastStatOctets
+							if deltaOctets < 0 {
+								deltaOctets = u.TotalOctets
+							}
+
+							half := deltaOctets / 2
+							upDelta := deltaOctets - half
+							newDown := cl.TrafficDown + half
+							newUp := cl.TrafficUp + upDelta
+
+							database.DB.Model(cl).Updates(map[string]interface{}{
+								"traffic_down":     newDown,
+								"traffic_up":       newUp,
+								"last_stat_octets": u.TotalOctets,
 							})
-							totalOctets += u.TotalOctets
-							// Disable client if traffic limit exceeded
-							if cl.TrafficLimit > 0 && u.TotalOctets >= cl.TrafficLimit && cl.Enabled {
-								database.DB.Model(&cl).Update("enabled", false)
+
+							totalDeltaDown += half
+							totalDeltaUp += upDelta
+
+							if cl.TrafficLimit > 0 && (newDown+newUp) >= cl.TrafficLimit && cl.Enabled {
+								database.DB.Model(cl).Update("enabled", false)
 								um.RemoveUser(p.Port, u.Username)
 								log.Printf("Client %s (proxy %d) disabled: traffic limit exceeded (%d/%d)",
-									cl.Name, p.ID, u.TotalOctets, cl.TrafficLimit)
+									cl.Name, p.ID, newDown+newUp, cl.TrafficLimit)
 							}
 							break
 						}
 					}
 				}
 
-				if totalOctets > 0 {
-					database.DB.Model(&p).Updates(map[string]interface{}{
-						"traffic_down": totalOctets / 2,
-						"traffic_up":   totalOctets - totalOctets/2,
+				if totalDeltaDown > 0 || totalDeltaUp > 0 {
+					newProxyDown := p.TrafficDown + totalDeltaDown
+					newProxyUp := p.TrafficUp + totalDeltaUp
+					database.DB.Model(p).Updates(map[string]interface{}{
+						"traffic_down": newProxyDown,
+						"traffic_up":   newProxyUp,
 					})
+
+					if p.TrafficLimit > 0 && (newProxyDown+newProxyUp) >= p.TrafficLimit {
+						database.DB.Model(p).Update("enabled", false)
+						StopProxy(p.ID)
+						log.Printf("Proxy %d disabled: traffic limit exceeded (%d/%d)",
+							p.ID, newProxyDown+newProxyUp, p.TrafficLimit)
+					}
 				}
 			} else {
-				collectDockerStats(&p)
+				collectDockerStats(p)
 			}
 		}
 	}
@@ -241,22 +255,41 @@ func collectDockerStats(p *database.Proxy) {
 	stats := GetContainerStats(p.ID)
 	rx := ParseNetBytes(stats.NetRx)
 	tx := ParseNetBytes(stats.NetTx)
-	if rx > 0 || tx > 0 {
+
+	deltaRx := rx - p.LastStatDown
+	deltaTx := tx - p.LastStatUp
+	if deltaRx < 0 {
+		deltaRx = rx
+	}
+	if deltaTx < 0 {
+		deltaTx = tx
+	}
+
+	if deltaRx > 0 || deltaTx > 0 {
+		newDown := p.TrafficDown + deltaRx
+		newUp := p.TrafficUp + deltaTx
 		database.DB.Model(p).Updates(map[string]interface{}{
-			"traffic_down": rx,
-			"traffic_up":   tx,
+			"traffic_down":   newDown,
+			"traffic_up":     newUp,
+			"last_stat_down": rx,
+			"last_stat_up":   tx,
 		})
+
+		if p.TrafficLimit > 0 && (newDown+newUp) >= p.TrafficLimit && p.Enabled {
+			database.DB.Model(p).Update("enabled", false)
+			StopProxy(p.ID)
+			log.Printf("Proxy %d disabled: traffic limit exceeded (%d/%d)",
+				p.ID, newDown+newUp, p.TrafficLimit)
+		}
 	}
 }
 
 // MatchSecret compares a panel secret (ee + domain_hex + padding) with a telemt raw secret.
 func MatchSecret(panelSecret, telemtSecret string) bool {
-	// Panel stores "ee" + 30 hex chars, telemt stores 32 hex chars (without "ee")
 	raw := panelSecret
 	if len(raw) > 2 && raw[:2] == "ee" {
 		raw = raw[2:]
 	}
-	// Pad to 32 for comparison
 	for len(raw) < 32 {
 		raw += "0"
 	}
@@ -269,8 +302,43 @@ func MatchSecret(panelSecret, telemtSecret string) bool {
 func ExpiryChecker() {
 	for {
 		time.Sleep(60 * time.Second)
-		if n := database.DisableExpiredClients(); n > 0 {
+		n, expiredClients := database.DisableExpiredClients()
+		if n > 0 {
 			log.Printf("Disabled %d expired client(s)", n)
+
+			proxyClients := make(map[uint][]database.Client)
+			for _, cl := range expiredClients {
+				proxyClients[cl.ProxyID] = append(proxyClients[cl.ProxyID], cl)
+			}
+
+			for pid, cls := range proxyClients {
+				var p database.Proxy
+				if database.DB.First(&p, pid).Error != nil || !p.Enabled {
+					continue
+				}
+
+				backend := GetBackend(p.Backend)
+				if um, ok := backend.(UserManager); ok {
+					// Telemt: remove expired users via API
+					for _, cl := range cls {
+						um.RemoveUser(p.Port, fmt.Sprintf("user_%d", cl.ID))
+					}
+				} else {
+					// Official: restart container with remaining secrets
+					secrets := database.GetEnabledSecrets(p.ID)
+					if len(secrets) > 0 {
+						cid, err := StartProxy(p.ID, p.Port, secrets, p.FakeTLSDomain, p.Backend)
+						if err == nil {
+							database.DB.Model(&p).Update("container_id", cid)
+						}
+					} else {
+						StopProxy(p.ID)
+						database.DB.Model(&p).Updates(map[string]interface{}{
+							"enabled": false, "container_id": "",
+						})
+					}
+				}
+			}
 		}
 	}
 }

@@ -1,6 +1,8 @@
 package web
 
 import (
+	"path/filepath"
+
 	"mtproxy-panel/auth"
 	"mtproxy-panel/config"
 
@@ -13,8 +15,8 @@ func NewRouter(cfg *config.Config) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 
-	r.LoadHTMLGlob("templates/*")
-	r.Static("/static", "./static")
+	r.LoadHTMLGlob(filepath.Join(cfg.BaseDir, "templates", "*"))
+	r.Static("/static", filepath.Join(cfg.BaseDir, "static"))
 
 	// Public pages
 	r.GET("/", LoginPage)

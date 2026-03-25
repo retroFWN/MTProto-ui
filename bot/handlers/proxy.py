@@ -1,11 +1,20 @@
-"""User-facing proxy commands."""
+"""User-facing proxy commands (admin-only)."""
+
+from datetime import datetime
 
 from aiogram import Router, types
 from aiogram.filters import Command
 
 from api import panel
+from config import cfg
 
 router = Router()
+
+
+def is_admin(msg: types.Message) -> bool:
+    if not msg.from_user:
+        return False
+    return msg.from_user.id in cfg.admin_ids
 
 
 def format_bytes(b: int) -> str:
@@ -18,6 +27,10 @@ def format_bytes(b: int) -> str:
 
 @router.message(Command("proxies"))
 async def cmd_proxies(msg: types.Message) -> None:
+    if not is_admin(msg):
+        await msg.answer("⛔ Нет доступа.")
+        return
+
     try:
         proxies = await panel.list_proxies()
     except Exception as e:
@@ -30,7 +43,7 @@ async def cmd_proxies(msg: types.Message) -> None:
 
     lines = ["<b>Прокси-серверы:</b>\n"]
     for p in proxies:
-        status = "🟢" if p.get("status") == "running" else "🔴"
+        status = "🟢" if p.get("status", {}).get("running") else "🔴"
         name = p.get("name", "—")
         pid = p.get("id")
         port = p.get("port", "?")
@@ -42,6 +55,10 @@ async def cmd_proxies(msg: types.Message) -> None:
 
 @router.message(Command("connect"))
 async def cmd_connect(msg: types.Message) -> None:
+    if not is_admin(msg):
+        await msg.answer("⛔ Нет доступа.")
+        return
+
     args = (msg.text or "").split()
     if len(args) < 2:
         await msg.answer("Использование: /connect &lt;proxy_id&gt;", parse_mode="HTML")
@@ -78,6 +95,10 @@ async def cmd_connect(msg: types.Message) -> None:
 
 @router.message(Command("status"))
 async def cmd_status(msg: types.Message) -> None:
+    if not is_admin(msg):
+        await msg.answer("⛔ Нет доступа.")
+        return
+
     args = (msg.text or "").split()
     if len(args) < 2:
         await msg.answer("Использование: /status &lt;proxy_id&gt;", parse_mode="HTML")
@@ -110,7 +131,6 @@ async def cmd_status(msg: types.Message) -> None:
         limit_str = format_bytes(limit) if limit > 0 else "∞"
         expiry = c.get("expiry_time", 0)
         if expiry and expiry > 0:
-            from datetime import datetime
             expiry_str = datetime.fromtimestamp(expiry).strftime("%Y-%m-%d")
         else:
             expiry_str = "—"
@@ -125,6 +145,10 @@ async def cmd_status(msg: types.Message) -> None:
 
 @router.message(Command("traffic"))
 async def cmd_traffic(msg: types.Message) -> None:
+    if not is_admin(msg):
+        await msg.answer("⛔ Нет доступа.")
+        return
+
     args = (msg.text or "").split()
     if len(args) < 2:
         await msg.answer("Использование: /traffic &lt;proxy_id&gt;", parse_mode="HTML")

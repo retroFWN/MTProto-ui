@@ -3,6 +3,7 @@ package web
 import (
 	"fmt"
 	"net/http"
+	"sync"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -21,6 +22,28 @@ import (
 	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/shirou/gopsutil/v4/net"
 )
+
+// ── CPU cache ────────────────────────────────────────────────────────────
+
+var (
+	cpuCacheMu   sync.Mutex
+	cpuCacheVal  float64
+	cpuCacheTime time.Time
+)
+
+func getCachedCPU() float64 {
+	cpuCacheMu.Lock()
+	defer cpuCacheMu.Unlock()
+	if time.Since(cpuCacheTime) < 2*time.Second {
+		return cpuCacheVal
+	}
+	pct, _ := cpu.Percent(200*time.Millisecond, false)
+	if len(pct) > 0 {
+		cpuCacheVal = pct[0]
+	}
+	cpuCacheTime = time.Now()
+	return cpuCacheVal
+}
 
 // ── Pages ────────────────────────────────────────────────────────────────
 
@@ -69,7 +92,7 @@ func Login(cfg *config.Config) gin.HandlerFunc {
 			return
 		}
 
-		c.SetCookie("access_token", token, 3600*6, "/", "", false, true)
+		c.SetCookie("access_token", token, 3600*6, "/", "", cfg.Domain != "", true)
 		c.JSON(http.StatusOK, gin.H{"success": true, "token": token})
 	}
 }
@@ -107,7 +130,7 @@ func ChangePassword(c *gin.Context) {
 // ── System ───────────────────────────────────────────────────────────────
 
 func SystemStatus(c *gin.Context) {
-	cpuPercent, _ := cpu.Percent(500*time.Millisecond, false)
+	cpuPct := getCachedCPU()
 	cpuCount, _ := cpu.Counts(true)
 	memInfo, _ := mem.VirtualMemory()
 
@@ -118,11 +141,6 @@ func SystemStatus(c *gin.Context) {
 	diskInfo, _ := disk.Usage(diskPath)
 	netInfo, _ := net.IOCounters(false)
 	hostInfo, _ := host.Info()
-
-	cpuPct := 0.0
-	if len(cpuPercent) > 0 {
-		cpuPct = cpuPercent[0]
-	}
 
 	var netSent, netRecv uint64
 	if len(netInfo) > 0 {
@@ -153,10 +171,23 @@ func ListProxies(c *gin.Context) {
 	var proxies []database.Proxy
 	database.DB.Find(&proxies)
 
+	// Batch client counts in one query
+	type countResult struct {
+		ProxyID uint  `gorm:"column:proxy_id"`
+		Count   int64 `gorm:"column:count"`
+	}
+	var counts []countResult
+	database.DB.Model(&database.Client{}).
+		Select("proxy_id, count(*) as count").
+		Group("proxy_id").
+		Find(&counts)
+	countMap := make(map[uint]int64)
+	for _, cc := range counts {
+		countMap[cc.ProxyID] = cc.Count
+	}
+
 	result := make([]gin.H, 0, len(proxies))
 	for _, p := range proxies {
-		var clientCount int64
-		database.DB.Model(&database.Client{}).Where("proxy_id = ?", p.ID).Count(&clientCount)
 		status := proxy.GetContainerStatus(p.ID)
 
 		result = append(result, gin.H{
@@ -172,7 +203,7 @@ func ListProxies(c *gin.Context) {
 			"traffic_total_limit": p.TrafficLimit,
 			"created_at":         p.CreatedAt,
 			"status":             status,
-			"client_count":       clientCount,
+			"client_count":       countMap[p.ID],
 		})
 	}
 	c.JSON(http.StatusOK, result)

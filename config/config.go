@@ -23,6 +23,7 @@ type Config struct {
 	ContainerPfx   string
 	StatsInterval  int // seconds
 	Domain         string // if set, enables auto-SSL via Let's Encrypt
+	DockerHostIP   string // IP to reach Docker host from inside container
 }
 
 func Load() *Config {
@@ -44,6 +45,7 @@ func Load() *Config {
 		ContainerPfx:   "mtproxy-",
 		StatsInterval:  10,
 		Domain:         os.Getenv("PANEL_DOMAIN"),
+		DockerHostIP:   envOr("DOCKER_HOST_IP", "127.0.0.1"),
 	}
 }
 

@@ -31,6 +31,8 @@ type Proxy struct {
 	TrafficUp        int64    `gorm:"default:0" json:"traffic_up"`
 	TrafficDown      int64    `gorm:"default:0" json:"traffic_down"`
 	TrafficLimit     int64    `gorm:"default:0" json:"traffic_total_limit"`
+	LastStatUp       int64    `gorm:"default:0" json:"-"`
+	LastStatDown     int64    `gorm:"default:0" json:"-"`
 	CreatedAt        int64    `gorm:"autoCreateTime" json:"created_at"`
 	Clients          []Client `gorm:"foreignKey:ProxyID;constraint:OnDelete:CASCADE" json:"clients,omitempty"`
 }
@@ -45,8 +47,9 @@ type Client struct {
 	TrafficDown  int64  `gorm:"default:0" json:"traffic_down"`
 	TrafficLimit int64  `gorm:"default:0" json:"traffic_limit"`
 	ExpiryTime   int64  `gorm:"default:0" json:"expiry_time"`
-	LastOnline   int64  `gorm:"default:0" json:"last_online"`
-	CreatedAt    int64  `gorm:"autoCreateTime" json:"created_at"`
+	LastOnline     int64  `gorm:"default:0" json:"last_online"`
+	LastStatOctets int64  `gorm:"default:0" json:"-"`
+	CreatedAt      int64  `gorm:"autoCreateTime" json:"created_at"`
 }
 
 type Setting struct {
@@ -102,10 +105,17 @@ func GetEnabledSecrets(proxyID uint) []string {
 	return secrets
 }
 
-func DisableExpiredClients() int {
+func DisableExpiredClients() (int, []Client) {
 	now := time.Now().Unix()
-	result := DB.Model(&Client{}).
+
+	var clients []Client
+	DB.Where("expiry_time > 0 AND expiry_time < ? AND enabled = ?", now, true).Find(&clients)
+	if len(clients) == 0 {
+		return 0, nil
+	}
+
+	DB.Model(&Client{}).
 		Where("expiry_time > 0 AND expiry_time < ? AND enabled = ?", now, true).
 		Update("enabled", false)
-	return int(result.RowsAffected)
+	return len(clients), clients
 }

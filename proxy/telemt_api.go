@@ -11,8 +11,10 @@ import (
 
 var httpClient = &http.Client{Timeout: 5 * time.Second}
 
+var DockerHostIP = "127.0.0.1"
+
 func telemtBaseURL(apiPort int) string {
-	return fmt.Sprintf("http://127.0.0.1:%d", apiPort)
+	return fmt.Sprintf("http://%s:%d", DockerHostIP, apiPort)
 }
 
 // ── List users ──────────────────────────────────────────────────────────

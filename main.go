@@ -21,6 +21,7 @@ func main() {
 	database.Init(cfg.DBPath)
 	database.Seed(cfg.DefaultUser, cfg.DefaultPass)
 	proxy.ContainerPfx = cfg.ContainerPfx
+	proxy.DockerHostIP = cfg.DockerHostIP
 
 	// Background tasks
 	go proxy.TrafficCollector(cfg.StatsInterval)
@@ -36,6 +37,7 @@ func main() {
 			domain = s.Value
 		}
 	}
+	cfg.Domain = domain
 
 	if domain != "" {
 		// Auto-SSL via Let's Encrypt
@@ -51,6 +53,15 @@ func main() {
 			log.Printf("HTTP  → https://%s (redirect + ACME)", domain)
 			if err := http.ListenAndServe(":80", manager.HTTPHandler(nil)); err != nil {
 				log.Printf("HTTP listener error: %v", err)
+			}
+		}()
+
+		// Internal HTTP API for bot/internal access
+		go func() {
+			addr := fmt.Sprintf("127.0.0.1:%d", cfg.Port)
+			log.Printf("Internal API on http://%s", addr)
+			if err := http.ListenAndServe(addr, router.Handler()); err != nil {
+				log.Printf("Internal HTTP listener error: %v", err)
 			}
 		}()
 
