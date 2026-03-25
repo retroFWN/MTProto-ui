@@ -245,7 +245,7 @@
 
                 html += `<tr>
                     <td class="font-medium">${c.name}</td>
-                    <td><code onclick="copyToClipboard('${c.secret}')" title="${t('click_to_copy')}">${c.secret.substring(0,16)}...</code></td>
+                    <td><code onclick="copyToClipboard('${c.secret}')" title="${t('click_to_copy')}">${c.secret.substring(0,8)}...${c.secret.slice(-6)}</code></td>
                     <td>${badge}</td>
                     <td>${traffic}</td>
                     ${extraCols}
