@@ -119,6 +119,7 @@
     applyI18n();
     let liveData = {};
     let proxyMeta = {};
+    let clientCache = {};
     let initialized = false;
 
     function onLangChange() { applyI18n(); refresh(); }
@@ -192,7 +193,7 @@
                             <h4 class="font-bold">${t('clients_count', {count: p.client_count})}</h4>
                             <button class="btn btn-outline btn-sm" onclick="showAddClientModal(${p.id})"><i class="fas fa-plus mr-1"></i>${t('btn_add_client')}</button>
                         </div>
-                        <div id="clients-${p.id}">${initialized ? '' : `<p class="text-sm" style="color:var(--text-secondary)">${t('loading')}</p>`}</div>
+                        <div id="clients-${p.id}">${clientCache[p.id] || (initialized ? '' : `<p class="text-sm" style="color:var(--text-secondary)">${t('loading')}</p>`)}</div>
                     </div>
                 </div>`;
             }
@@ -209,7 +210,7 @@
         try {
             const clients = await api(`/api/proxies/${proxyId}/clients`);
             const el = document.getElementById(`clients-${proxyId}`);
-            if (clients.length === 0) { el.innerHTML = `<p class="text-sm" style="color:var(--text-secondary)">${t('no_clients')}</p>`; return; }
+            if (clients.length === 0) { const h = `<p class="text-sm" style="color:var(--text-secondary)">${t('no_clients')}</p>`; clientCache[proxyId] = h; el.innerHTML = h; return; }
 
             const isTelemt = backend === 'telemt';
             const live = (isTelemt && running && liveData[proxyId] && liveData[proxyId].users) ? liveData[proxyId].users : [];
@@ -258,6 +259,7 @@
                 </tr>`;
             }
             html += '</tbody></table>';
+            clientCache[proxyId] = html;
             el.innerHTML = html;
         } catch (e) { console.error(e); }
     }

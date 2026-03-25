@@ -1,246 +1,138 @@
-# MTProxy Panel
+<div align="center">
 
-A web panel for managing Telegram MTProto proxy servers. Inspired by [3x-ui](https://github.com/MHSanaei/3x-ui), built specifically for MTProto.
+<img src="image/logo.png" alt="MTProxy Panel" width="300">
+
+**Modern web panel for managing Telegram MTProto proxy servers**
+
+[![Go](https://img.shields.io/badge/Go-1.23-00ADD8?logo=go&logoColor=white)](https://go.dev/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Telegram](https://img.shields.io/badge/Telegram-Bot-26A5E4?logo=telegram&logoColor=white)](#-telegram-bot)
+
+**English** | [Русский](README.md)
+
+---
+
+<img src="image/1.png" alt="Screenshot" width="800">
+
+</div>
 
 ## Features
 
-- **Dashboard** — real-time CPU, RAM, disk, and network monitoring
-- **Multi-proxy** — multiple proxy instances on different ports
-- **Multi-client** — multiple secrets (users) per proxy
-- **Engine selection** — Official C (`telegrammessenger/proxy`) or Rust (`seriyps/mtproto-proxy`)
-- **Fake TLS** — traffic disguised as HTTPS
-- **Limits** — per-client traffic caps and expiry dates
-- **Authentication** — JWT + bcrypt, password management
-- **Auto-SSL** — automatic Let's Encrypt certificate when a domain is configured
-- **Telegram Bot** — built-in aiogram bot for managing proxies from Telegram
-- **Docker** — each proxy is a container managed from the panel
-- **Links** — auto-generated `tg://proxy?...` one-click connection links
-- **Single binary** — Go, ~25 MB, zero dependencies
+| | Feature | Description |
+|---|---|---|
+| :chart_with_upwards_trend: | **Dashboard** | Real-time CPU, RAM, disk, network monitoring |
+| :shield: | **Multi-proxy** | Multiple proxy instances on different ports |
+| :busts_in_silhouette: | **Multi-client** | Per-user secrets, traffic limits, expiry dates |
+| :gear: | **Dual Engine** | Official C or telemt Rust — choose per proxy |
+| :lock: | **Fake TLS** | Traffic disguised as HTTPS to bypass blocks |
+| :globe_with_meridians: | **Auto-SSL** | Automatic Let's Encrypt certificates |
+| :robot: | **Telegram Bot** | Manage proxies directly from Telegram |
+| :link: | **One-click Links** | Auto-generated `tg://proxy` connection links |
+| :whale: | **Docker Native** | Each proxy = isolated container |
+| :zap: | **Single Binary** | Go, ~25 MB, zero external dependencies |
 
 ## Quick Start
 
-### Docker Compose (recommended)
+### 1. Install Docker
 
 ```bash
-git clone https://github.com/YOUR_USER/mtproto.git
-cd mtproto
+curl -fsSL https://get.docker.com | sh
+systemctl enable --now docker
+```
+
+### 2. Deploy the panel
+
+```bash
+git clone https://github.com/retroFWN/MTProto-ui.git
+cd MTProto-ui
 docker compose up -d --build
 ```
 
-### Local Development
+### 3. Open the panel
 
-Requires [Go 1.23+](https://go.dev/dl/), Docker, Python 3.10+ (for bot).
-
-```bash
-go mod tidy
-pip install -r bot/requirements.txt
-go run .
 ```
-
-The panel starts at `http://localhost:8080`.
-
-## Default Credentials
+http://YOUR_SERVER_IP:8080
+```
 
 | | |
 |---|---|
-| URL | `http://SERVER_IP:8080` |
-| Login | `admin` |
-| Password | `admin` |
+| **Login** | `admin` |
+| **Password** | `admin` |
 
-**Change the default password after first login!**
+> :warning: **Change the default password after first login!**
 
-## Proxy Engine Selection
-
-Choose between two MTProto proxy engines in the Settings page:
+## Proxy Engines
 
 | | Official (C) | telemt (Rust) |
-|---|---|---|
-| Image | `telegrammessenger/proxy` | `seriyps/mtproto-proxy` |
-| Fake TLS | v1 | v2 |
-| Per-user metrics | no | Prometheus |
-| Multi-secret | limited | full |
-| Management API | no | HTTP API |
-| Stability | stable | stable |
+|---|:---:|:---:|
+| **Image** | `telegrammessenger/proxy` | `whn0thacked/telemt-docker` |
+| **Fake TLS** | v1 | v2 |
+| **Per-user stats** | :x: | :white_check_mark: |
+| **Management API** | :x: | :white_check_mark: |
+| **Dynamic secrets** | :x: | :white_check_mark: |
+| **Anti-replay** | :x: | :white_check_mark: |
 
-## Auto-SSL (Let's Encrypt)
-
-To enable automatic HTTPS:
-
-1. Set your domain in **Settings > SSL Certificate** (e.g. `panel.example.com`)
-2. Open ports **80** and **443** on your server
-3. Restart the panel
-
-Or set via environment variable:
-```bash
-PANEL_DOMAIN=panel.example.com
-```
-
-The panel will automatically obtain and renew a Let's Encrypt certificate.
-
-## Telegram Bot
-
-Built-in Telegram bot for proxy management directly from the messenger. The bot runs as a subprocess launched by the panel — no separate setup required.
-
-### Setup
+## :robot: Telegram Bot
 
 1. Create a bot via [@BotFather](https://t.me/BotFather)
-2. Go to **Settings > Telegram Bot**, paste the token and your Telegram user ID
-3. Click **Save**, then **Start Bot**
+2. In panel **Settings**, paste the bot token and your Telegram ID
+3. Click **Save** then **Start Bot**
 
-### Bot Commands
+| Command | Description |
+|---|---|
+| `/proxies` | List proxy servers |
+| `/connect <id>` | Get connection links |
+| `/status <id>` | Proxy status & clients |
+| `/addclient <pid> <name> [gb] [days]` | Create client |
+| `/delclient <pid> <cid>` | Delete client |
 
-| Command | Description | Access |
-|---------|-------------|--------|
-| `/start` | Welcome message and help | All |
-| `/help` | List available commands | All |
-| `/proxies` | List proxy servers | All |
-| `/connect <id>` | Get tg:// connection links | All |
-| `/status <id>` | Proxy status and clients | All |
-| `/traffic <id>` | Traffic statistics | All |
-| `/addclient <pid> <name> [gb] [days]` | Create client | Admin |
-| `/delclient <pid> <cid>` | Delete client | Admin |
-| `/resettraffic <pid> <cid>` | Reset client traffic | Admin |
+## Configuration
 
-Admin commands are restricted to users whose Telegram IDs are listed in settings.
+| Variable | Default | Description |
+|---|---|---|
+| `PANEL_PORT` | `8080` | Panel port |
+| `PANEL_DOMAIN` | — | Domain for auto-SSL |
+| `SECRET_KEY` | auto-generated | JWT signing key |
+| `PROXY_BACKEND` | `official` | Default engine |
+| `DOCKER_HOST_IP` | `127.0.0.1` | Docker host IP |
+
+### Auto-SSL
+
+```yaml
+# docker-compose.yml
+environment:
+  - PANEL_DOMAIN=panel.example.com
+ports:
+  - "80:80"
+  - "443:443"
+```
+
+## Update
+
+```bash
+cd /opt/MTProto-ui
+git pull
+docker compose up -d --build
+```
 
 ## Tech Stack
 
-| Component | Technology |
-|-----------|-----------|
-| Backend | Go, Gin |
-| Database | SQLite (GORM) |
-| Auth | JWT (HS256), bcrypt |
-| Frontend | HTML, CSS, vanilla JS |
-| Proxy | Docker, Official C / telemt Rust |
-| SSL | Let's Encrypt (autocert) |
-| Telegram Bot | Python, aiogram v3 |
-| Metrics | gopsutil |
+<table>
+<tr><td><b>Backend</b></td><td>Go, Gin, GORM, SQLite</td></tr>
+<tr><td><b>Frontend</b></td><td>HTML, CSS, Vanilla JS</td></tr>
+<tr><td><b>Auth</b></td><td>JWT (HS256), bcrypt</td></tr>
+<tr><td><b>Bot</b></td><td>Python, aiogram v3</td></tr>
+<tr><td><b>SSL</b></td><td>Let's Encrypt (autocert)</td></tr>
+<tr><td><b>Proxy</b></td><td>Docker containers</td></tr>
+</table>
 
-## Project Structure
+## Credits
 
-```
-mtproto/
-├── main.go                 # Entry point
-├── config/config.go        # Configuration
-├── database/database.go    # Models + SQLite
-├── auth/auth.go            # JWT + bcrypt
-├── proxy/
-│   ├── manager.go          # Docker container management
-│   ├── backend.go          # Backend interface + registry
-│   ├── official.go         # Official C backend
-│   └── telemt.go           # telemt Rust backend
-├── botmanager/
-│   └── botmanager.go       # Bot process management
-├── web/
-│   ├── router.go           # Gin routes
-│   ├── middleware.go       # Auth middleware (Page, API, Bot)
-│   └── handlers.go         # API handlers
-├── bot/                    # Telegram bot (Python, aiogram)
-│   ├── main.py             # Bot entry point
-│   ├── config.py           # Configuration from env
-│   ├── api.py              # Panel HTTP client
-│   └── handlers/           # Bot commands
-│       ├── start.py        # /start, /help
-│       ├── proxy.py        # /proxies, /connect, /status, /traffic
-│       └── admin.py        # /addclient, /delclient, /resettraffic
-├── templates/              # HTML templates
-├── static/                 # CSS, JS
-├── Dockerfile
-└── docker-compose.yml
-```
-
-## API
-
-All `/api/` endpoints require authentication (cookie or `Authorization: Bearer <token>`).
-
-### Auth
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/login` | Sign in (username, password) |
-| POST | `/api/logout` | Sign out |
-| POST | `/api/change-password` | Change password |
-
-### System
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/system/status` | CPU, RAM, Disk, Network, Uptime |
-
-### Proxies
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/proxies` | List all proxies |
-| POST | `/api/proxies` | Create proxy |
-| PUT | `/api/proxies/:id` | Update proxy |
-| DELETE | `/api/proxies/:id` | Delete proxy |
-| POST | `/api/proxies/:id/start` | Start container |
-| POST | `/api/proxies/:id/stop` | Stop container |
-| POST | `/api/proxies/:id/restart` | Restart container |
-| GET | `/api/proxies/:id/stats` | Container CPU/RAM/Net |
-| GET | `/api/proxies/:id/live` | Per-user live stats (telemt) |
-| GET | `/api/proxies/:id/logs` | Container logs |
-
-### Clients
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/proxies/:id/clients` | List proxy clients |
-| POST | `/api/proxies/:id/clients` | Add client |
-| PUT | `/api/proxies/:id/clients/:cid` | Update client |
-| DELETE | `/api/proxies/:id/clients/:cid` | Delete client |
-| POST | `/api/proxies/:id/clients/:cid/reset-traffic` | Reset traffic |
-
-### Settings & Bot
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/settings` | Get settings |
-| POST | `/api/settings` | Update settings |
-| POST | `/api/pull-image` | Pull latest proxy Docker image |
-| GET | `/api/backends` | List available engines |
-| GET | `/api/bot/status` | Telegram bot status |
-| POST | `/api/bot/start` | Start bot |
-| POST | `/api/bot/stop` | Stop bot |
-
-### Bot Internal API
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/bot/api/proxies` | List proxies (for bot) |
-| GET | `/bot/api/proxies/:id/clients` | Proxy clients (for bot) |
-| POST | `/bot/api/proxies/:id/clients` | Create client (for bot) |
-| DELETE | `/bot/api/proxies/:id/clients/:cid` | Delete client (for bot) |
-| GET | `/bot/api/settings` | Settings (for bot) |
-
-Authorization: `X-Bot-Token` header with the panel's SECRET_KEY.
-
-## Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PANEL_HOST` | `0.0.0.0` | Panel host |
-| `PANEL_PORT` | `8080` | Panel port |
-| `PANEL_DOMAIN` | — | Domain for auto-SSL (Let's Encrypt) |
-| `SECRET_KEY` | auto | JWT key (persisted to `data/.secret_key`) |
-| `PROXY_BACKEND` | `official` | Default engine (`official` or `telemt`) |
-
-## Links & Sources
-
-### Project
-- [3x-ui](https://github.com/MHSanaei/3x-ui) — inspiration for the panel (Xray + Go + Gin)
-- [MTProxyMax](https://github.com/SamNet-dev/MTProxyMax) — MTProto manager built on telemt
-
-### Proxy Engines
-- [telegrammessenger/proxy](https://hub.docker.com/r/telegrammessenger/proxy/) — official MTProto proxy (C)
-- [telemt/telemt](https://github.com/telemt/telemt) — MTProxy on Rust + Tokio (source code)
-- [An0nX/telemt-docker](https://github.com/An0nX/telemt-docker) — Docker image for telemt
-- [whn0thacked/telemt-docker](https://hub.docker.com/r/whn0thacked/telemt-docker) — Docker Hub image for telemt
-- [telemt API docs](https://github.com/telemt/telemt/blob/main/docs/API.md)
-- [telemt config reference](https://github.com/telemt/telemt/blob/main/docs/CONFIG_PARAMS.en.md)
-
-### Tech Stack
-- [Go](https://go.dev/) — panel language
-- [Gin](https://github.com/gin-gonic/gin) — HTTP framework
-- [GORM](https://gorm.io/) — SQLite ORM
-- [aiogram](https://docs.aiogram.dev/) — Telegram Bot Framework (Python)
-- [Let's Encrypt](https://letsencrypt.org/) — Auto-SSL
+- [3x-ui](https://github.com/MHSanaei/3x-ui) — panel design inspiration
+- [telegrammessenger/proxy](https://hub.docker.com/r/telegrammessenger/proxy/) — official MTProto proxy
+- [telemt](https://github.com/nicehash/telemt) — Rust MTProto proxy engine
 
 ## License
 
-MIT
+[MIT](LICENSE)
