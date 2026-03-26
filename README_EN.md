@@ -131,7 +131,7 @@ docker compose up -d --build
 
 - [3x-ui](https://github.com/MHSanaei/3x-ui) — panel design inspiration
 - [telegrammessenger/proxy](https://github.com/TelegramMessenger/MTProxy) — official MTProto proxy (C)
-- [telemt-docker](https://gitlab.com/An0nX/telemt-docker) — Rust MTProto proxy engine
+- [telemt](https://github.com/telemt/telemt) — Rust MTProto proxy engine
 
 ## License
 
