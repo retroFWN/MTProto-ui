@@ -295,14 +295,13 @@ func collectDockerStats(p *database.Proxy) {
 }
 
 // MatchSecret compares a panel secret with a telemt API secret.
+// Panel stores "ee"+30hex, telemt stores stripped+padded 32hex.
 func MatchSecret(panelSecret, telemtSecret string) bool {
-	// Direct match (telemt backend stores raw 32-hex)
 	if strings.EqualFold(panelSecret, telemtSecret) {
 		return true
 	}
-	// Fallback: strip ee prefix and pad for comparison
 	raw := panelSecret
-	if len(raw) > 2 && raw[:2] == "ee" {
+	if len(raw) >= 2 && (raw[:2] == "ee" || raw[:2] == "dd") {
 		raw = raw[2:]
 	}
 	for len(raw) < 32 {
