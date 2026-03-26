@@ -48,6 +48,13 @@ cp -r "$SCRIPT_DIR"/.* "$INSTALL_DIR/" 2>/dev/null || true
 
 cd "$INSTALL_DIR" || { echo -e "${RED}Failed to cd to ${INSTALL_DIR}${NC}"; exit 1; }
 
+# Stop old panel container if exists (e.g. from previous install location)
+if docker ps -a --format '{{.Names}}' | grep -q '^mtproxy-panel$'; then
+    echo -e "${YELLOW}Stopping old mtproxy-panel container...${NC}"
+    docker stop mtproxy-panel 2>/dev/null
+    docker rm mtproxy-panel 2>/dev/null
+fi
+
 # Build and start via Docker Compose
 echo -e "${YELLOW}Building and starting panel...${NC}"
 docker compose up -d --build
