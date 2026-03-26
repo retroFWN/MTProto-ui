@@ -22,22 +22,23 @@ func ContainerName(proxyID uint) string {
 
 // ── Secret generation ────────────────────────────────────────────────────
 
-// GenerateSecret creates an ee-prefixed 32-char secret for the official C proxy.
-// Format: ee + domain_hex + random = 32 chars total.
+// GenerateSecret creates a fake-TLS secret in the standard MTProto format:
+//
+//	ee + 32 hex (16-byte random key) + hex(domain)
+//
+// The Telegram client parses this as:
+//
+//	strip "ee" → first 32 hex chars = 16-byte key, remaining = domain for TLS SNI.
 func GenerateSecret(fakeTLSDomain string) string {
+	keyBytes := make([]byte, 16)
+	rand.Read(keyBytes)
+	keyHex := hex.EncodeToString(keyBytes)
 	domainHex := hex.EncodeToString([]byte(fakeTLSDomain))
-	needed := 30 - len(domainHex)
-	if needed > 0 {
-		randBytes := make([]byte, (needed+1)/2)
-		rand.Read(randBytes)
-		return "ee" + domainHex + hex.EncodeToString(randBytes)[:needed]
-	}
-	return "ee" + domainHex[:30]
+	return "ee" + keyHex + domainHex
 }
 
 // BuildTgLink generates the tg:// proxy link.
 func BuildTgLink(serverIP string, port int, secret, backend, domain string) string {
-	// Same 32-char ee-prefixed format for both backends
 	return fmt.Sprintf("tg://proxy?server=%s&port=%d&secret=%s", serverIP, port, secret)
 }
 
@@ -294,23 +295,28 @@ func collectDockerStats(p *database.Proxy) {
 	}
 }
 
-// MatchSecret compares a panel secret with a telemt API secret.
-// Panel stores "ee"+30hex, telemt stores stripped+padded 32hex.
-func MatchSecret(panelSecret, telemtSecret string) bool {
-	if strings.EqualFold(panelSecret, telemtSecret) {
-		return true
-	}
-	raw := panelSecret
+// ExtractKey extracts the 32-hex (16-byte) key from a panel secret.
+// Panel stores "ee" + 32hex_key + domain_hex; telemt stores just the 32hex key.
+func ExtractKey(secret string) string {
+	raw := secret
 	if len(raw) >= 2 && (raw[:2] == "ee" || raw[:2] == "dd") {
 		raw = raw[2:]
-	}
-	for len(raw) < 32 {
-		raw += "0"
 	}
 	if len(raw) > 32 {
 		raw = raw[:32]
 	}
-	return strings.EqualFold(raw, telemtSecret)
+	for len(raw) < 32 {
+		raw += "0"
+	}
+	return raw
+}
+
+// MatchSecret compares a panel secret with a telemt API secret.
+func MatchSecret(panelSecret, telemtSecret string) bool {
+	if strings.EqualFold(panelSecret, telemtSecret) {
+		return true
+	}
+	return strings.EqualFold(ExtractKey(panelSecret), telemtSecret)
 }
 
 func ExpiryChecker() {

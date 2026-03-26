@@ -90,18 +90,8 @@ func generateConfigTOML(port int, secrets []string, domain string) string {
 
 	sb.WriteString("[access.users]\n")
 	for i, s := range secrets {
-		// Client strips "ee" prefix before auth, so telemt must have the same stripped key
-		raw := s
-		if len(raw) >= 2 && (raw[:2] == "ee" || raw[:2] == "dd") {
-			raw = raw[2:]
-		}
-		for len(raw) < 32 {
-			raw += "0"
-		}
-		if len(raw) > 32 {
-			raw = raw[:32]
-		}
-		sb.WriteString(fmt.Sprintf("user_%d = \"%s\"\n", i, raw))
+		// Extract the 32-hex key (strip ee prefix + domain suffix)
+		sb.WriteString(fmt.Sprintf("user_%d = \"%s\"\n", i, ExtractKey(s)))
 	}
 
 	return sb.String()

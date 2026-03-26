@@ -76,17 +76,8 @@ func telemtAddUser(apiPort int, username, secret string, maxConns int, quotaByte
 		Username: username,
 	}
 
-	// Client strips "ee" before auth — telemt must have the same stripped key
-	req.Secret = secret
-	if len(req.Secret) >= 2 && (req.Secret[:2] == "ee" || req.Secret[:2] == "dd") {
-		req.Secret = req.Secret[2:]
-	}
-	for len(req.Secret) < 32 {
-		req.Secret += "0"
-	}
-	if len(req.Secret) > 32 {
-		req.Secret = req.Secret[:32]
-	}
+	// Extract the 32-hex key (strip ee prefix + domain suffix)
+	req.Secret = ExtractKey(secret)
 
 	if maxConns > 0 {
 		req.MaxTCPConns = maxConns
