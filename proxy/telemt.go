@@ -90,19 +90,9 @@ func generateConfigTOML(secrets []string, domain string) string {
 
 	sb.WriteString("[access.users]\n")
 	for i, s := range secrets {
-		// Strip "ee" prefix and domain hex — telemt wants raw 32-hex secret
-		rawSecret := s
-		if len(rawSecret) > 2 && strings.HasPrefix(rawSecret, "ee") {
-			rawSecret = rawSecret[2:]
-		}
-		// Pad to 32 hex chars if needed
-		for len(rawSecret) < 32 {
-			rawSecret += "0"
-		}
-		if len(rawSecret) > 32 {
-			rawSecret = rawSecret[:32]
-		}
-		sb.WriteString(fmt.Sprintf("user_%d = \"%s\"\n", i, rawSecret))
+		// Pass the full 32-hex secret as-is (including ee prefix)
+		// The client uses the same 32 hex chars for auth
+		sb.WriteString(fmt.Sprintf("user_%d = \"%s\"\n", i, s))
 	}
 
 	return sb.String()

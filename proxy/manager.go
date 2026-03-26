@@ -287,19 +287,9 @@ func collectDockerStats(p *database.Proxy) {
 	}
 }
 
-// MatchSecret compares a panel secret (ee + domain_hex + padding) with a telemt raw secret.
+// MatchSecret compares a panel secret with a telemt secret.
 func MatchSecret(panelSecret, telemtSecret string) bool {
-	raw := panelSecret
-	if len(raw) > 2 && raw[:2] == "ee" {
-		raw = raw[2:]
-	}
-	for len(raw) < 32 {
-		raw += "0"
-	}
-	if len(raw) > 32 {
-		raw = raw[:32]
-	}
-	return strings.EqualFold(raw, telemtSecret)
+	return strings.EqualFold(panelSecret, telemtSecret)
 }
 
 func ExpiryChecker() {
