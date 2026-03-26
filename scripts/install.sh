@@ -37,28 +37,24 @@ if ! docker compose version &> /dev/null 2>&1; then
     apt-get install -y docker-compose-plugin 2>/dev/null || true
 fi
 
-# Install git if not present
-if ! command -v git &> /dev/null; then
-    echo -e "${YELLOW}Installing git...${NC}"
-    apt-get install -y git 2>/dev/null || yum install -y git 2>/dev/null || true
-fi
-
 INSTALL_DIR="/opt/MTProto-ui"
-REPO_URL="https://github.com/retroFWN/MTProto-ui.git"
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
-if [ -d "$INSTALL_DIR/.git" ]; then
-    echo -e "${YELLOW}Updating existing installation in ${INSTALL_DIR}...${NC}"
-    cd "$INSTALL_DIR"
-    git pull
-else
-    echo -e "${YELLOW}Cloning to ${INSTALL_DIR}...${NC}"
-    git clone "$REPO_URL" "$INSTALL_DIR"
-    cd "$INSTALL_DIR"
-fi
+# Copy project files to install directory
+mkdir -p "$INSTALL_DIR"
+echo -e "${YELLOW}Copying files to ${INSTALL_DIR}...${NC}"
+cp -r "$SCRIPT_DIR"/* "$INSTALL_DIR/" 2>/dev/null
+cp -r "$SCRIPT_DIR"/.* "$INSTALL_DIR/" 2>/dev/null || true
+
+cd "$INSTALL_DIR" || { echo -e "${RED}Failed to cd to ${INSTALL_DIR}${NC}"; exit 1; }
 
 # Build and start via Docker Compose
 echo -e "${YELLOW}Building and starting panel...${NC}"
 docker compose up -d --build
+if [ $? -ne 0 ]; then
+    echo -e "${RED}Docker Compose failed! Check logs: docker compose logs${NC}"
+    exit 1
+fi
 
 SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')
 
