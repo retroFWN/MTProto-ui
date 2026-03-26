@@ -50,7 +50,7 @@ func TelemtMetricsPort(proxyPort int) int {
 }
 
 // generateConfigTOML creates a telemt config.toml with users and settings.
-func generateConfigTOML(secrets []string, domain string) string {
+func generateConfigTOML(port int, secrets []string, domain string) string {
 	var sb strings.Builder
 
 	sb.WriteString("[general]\n")
@@ -68,13 +68,13 @@ func generateConfigTOML(secrets []string, domain string) string {
 	sb.WriteString("me_level = \"normal\"\n\n")
 
 	sb.WriteString("[server]\n")
-	sb.WriteString("port = 443\n")
-	sb.WriteString("metrics_port = 9090\n")
+	sb.WriteString(fmt.Sprintf("port = %d\n", port))
+	sb.WriteString(fmt.Sprintf("metrics_port = %d\n", port+20000))
 	sb.WriteString("metrics_whitelist = [\"0.0.0.0/0\", \"::0/0\"]\n\n")
 
 	sb.WriteString("[server.api]\n")
 	sb.WriteString("enabled = true\n")
-	sb.WriteString("listen = \"0.0.0.0:9091\"\n")
+	sb.WriteString(fmt.Sprintf("listen = \"0.0.0.0:%d\"\n", port+10000))
 	sb.WriteString("whitelist = [\"0.0.0.0/0\", \"::0/0\"]\n\n")
 
 	sb.WriteString("[[server.listeners]]\n")
@@ -117,7 +117,7 @@ func (b *TelemtBackend) BuildRunArgs(containerName string, port int, secrets []s
 	configDir := filepath.Join("data", "telemt", containerName)
 	os.MkdirAll(configDir, 0755)
 	configPath := filepath.Join(configDir, "telemt.toml")
-	configContent := generateConfigTOML(secrets, domain)
+	configContent := generateConfigTOML(port, secrets, domain)
 	os.WriteFile(configPath, []byte(configContent), 0644)
 
 	// Resolve the volume mount path for the host
@@ -134,12 +134,10 @@ func (b *TelemtBackend) BuildRunArgs(containerName string, port int, secrets []s
 		"run", "-d",
 		"--name", containerName,
 		"--restart", "unless-stopped",
+		"--network", "host",
 		"--user", "root",
 		"--ulimit", "nofile=65536:65536",
 		"-e", "RUST_LOG=info",
-		"-p", fmt.Sprintf("%d:443", port),
-		"-p", fmt.Sprintf("%d:%d", TelemtAPIPort(port), telemtAPIPort),
-		"-p", fmt.Sprintf("%d:%d", TelemtMetricsPort(port), telemtMetrics),
 		"-v", fmt.Sprintf("%s:/etc/telemt", hostConfigDir),
 		telemtImage,
 		"/etc/telemt/telemt.toml",
