@@ -35,23 +35,9 @@ func GenerateSecret(fakeTLSDomain string) string {
 	return "ee" + domainHex[:30]
 }
 
-// GenerateTelemtSecret creates a raw 32-hex secret for telemt Rust proxy.
-// Telemt handles the ee prefix and domain in its link generation internally.
-func GenerateTelemtSecret() string {
-	b := make([]byte, 16)
-	rand.Read(b)
-	return hex.EncodeToString(b)
-}
-
-// BuildTgLink generates the tg:// proxy link for the appropriate backend.
+// BuildTgLink generates the tg:// proxy link.
 func BuildTgLink(serverIP string, port int, secret, backend, domain string) string {
-	if backend == "telemt" {
-		// telemt format: ee + 32-hex secret + hex(domain)
-		// Client parses: first 16 bytes = auth key, remaining = domain for TLS SNI
-		domainHex := hex.EncodeToString([]byte(domain))
-		return fmt.Sprintf("tg://proxy?server=%s&port=%d&secret=ee%s%s", serverIP, port, secret, domainHex)
-	}
-	// official: secret already contains ee prefix (32 chars)
+	// Same 32-char ee-prefixed format for both backends
 	return fmt.Sprintf("tg://proxy?server=%s&port=%d&secret=%s", serverIP, port, secret)
 }
 

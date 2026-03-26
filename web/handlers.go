@@ -246,12 +246,7 @@ func CreateProxy(c *gin.Context) {
 	}
 	database.DB.Create(&p)
 
-	var secret string
-	if req.Backend == "telemt" {
-		secret = proxy.GenerateTelemtSecret()
-	} else {
-		secret = proxy.GenerateSecret(req.FakeTLSDomain)
-	}
+	secret := proxy.GenerateSecret(req.FakeTLSDomain)
 	client := database.Client{
 		ProxyID: p.ID,
 		Name:    "default",
@@ -559,12 +554,7 @@ func CreateClient(c *gin.Context) {
 		return
 	}
 
-	var secret string
-	if p.Backend == "telemt" {
-		secret = proxy.GenerateTelemtSecret()
-	} else {
-		secret = proxy.GenerateSecret(p.FakeTLSDomain)
-	}
+	secret := proxy.GenerateSecret(p.FakeTLSDomain)
 	cl := database.Client{
 		ProxyID:      p.ID,
 		Name:         req.Name,
