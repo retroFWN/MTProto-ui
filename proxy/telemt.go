@@ -58,8 +58,8 @@ func generateConfigTOML(port int, secrets []string, domain string) string {
 	sb.WriteString("log_level = \"normal\"\n\n")
 
 	sb.WriteString("[general.modes]\n")
-	sb.WriteString("classic = false\n")
-	sb.WriteString("secure = false\n")
+	sb.WriteString("classic = true\n")
+	sb.WriteString("secure = true\n")
 	sb.WriteString("tls = true\n\n")
 
 	sb.WriteString("[general.telemetry]\n")
