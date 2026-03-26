@@ -46,11 +46,10 @@ func GenerateTelemtSecret() string {
 // BuildTgLink generates the tg:// proxy link for the appropriate backend.
 func BuildTgLink(serverIP string, port int, secret, backend, domain string) string {
 	if backend == "telemt" {
-		// telemt format: ee + raw_secret + hex(domain)
-		domainHex := hex.EncodeToString([]byte(domain))
-		return fmt.Sprintf("tg://proxy?server=%s&port=%d&secret=ee%s%s", serverIP, port, secret, domainHex)
+		// telemt: ee + 32-hex raw secret = 34 chars (standard ee format)
+		return fmt.Sprintf("tg://proxy?server=%s&port=%d&secret=ee%s", serverIP, port, secret)
 	}
-	// official format: secret already contains ee prefix
+	// official: secret already contains ee prefix (32 chars)
 	return fmt.Sprintf("tg://proxy?server=%s&port=%d&secret=%s", serverIP, port, secret)
 }
 
