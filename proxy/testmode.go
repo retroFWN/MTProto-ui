@@ -125,7 +125,14 @@ func RunTestMode(tc TestConfig) {
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
 
-	fmt.Println("\nStopping test containers...")
+	fmt.Println("\n=== Container logs ===")
+	for _, p := range started {
+		fmt.Printf("\n--- %s (%s) ---\n", p.label, p.name)
+		logs, _ := exec.Command("docker", "logs", "--tail", "30", p.name).CombinedOutput()
+		fmt.Println(string(logs))
+	}
+
+	fmt.Println("Stopping test containers...")
 	for _, p := range started {
 		exec.Command("docker", "stop", p.name).Run()
 		exec.Command("docker", "rm", p.name).Run()
