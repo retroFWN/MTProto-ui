@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	telemtImage   = "telemt-local"
+	telemtImage   = "whn0thacked/telemt-docker:latest"
 	telemtAPIPort = 9091
 	telemtMetrics = 9090
 )
@@ -135,8 +135,7 @@ func (b *TelemtBackend) BuildRunArgs(containerName string, port int, secrets []s
 }
 
 func (b *TelemtBackend) PullImage() error {
-	// Build from upstream source (pre-built image has UPX issues on some kernels)
-	return exec.Command("docker", "build", "-t", telemtImage, "https://github.com/telemt/telemt.git").Run()
+	return exec.Command("docker", "pull", telemtImage).Run()
 }
 
 // ── UserManager interface ───────────────────────────────────────────────
