@@ -22,19 +22,20 @@ func ContainerName(proxyID uint) string {
 
 // ── Secret generation ────────────────────────────────────────────────────
 
-// GenerateSecret creates a fake-TLS secret in the standard MTProto format:
-//
-//	ee + 32 hex (16-byte random key) + hex(domain)
-//
-// The Telegram client parses this as:
-//
-//	strip "ee" → first 32 hex chars = 16-byte key, remaining = domain for TLS SNI.
+// GenerateSecret creates an ee-prefixed 32-hex-char secret.
+// At 32 hex chars (16 bytes) the Telegram client uses "simple" mode —
+// the entire 16 bytes (including the leading 0xEE byte) ARE the key.
+// Fake-TLS (SNI masquerading) requires ≥17 bytes: 1-byte 0xEE prefix +
+// 16-byte key + domain bytes, i.e. ≥34 hex chars.
 func GenerateSecret(fakeTLSDomain string) string {
-	keyBytes := make([]byte, 16)
-	rand.Read(keyBytes)
-	keyHex := hex.EncodeToString(keyBytes)
 	domainHex := hex.EncodeToString([]byte(fakeTLSDomain))
-	return "ee" + keyHex + domainHex
+	needed := 30 - len(domainHex)
+	if needed > 0 {
+		randBytes := make([]byte, (needed+1)/2)
+		rand.Read(randBytes)
+		return "ee" + domainHex + hex.EncodeToString(randBytes)[:needed]
+	}
+	return "ee" + domainHex[:30]
 }
 
 // BuildTgLink generates the tg:// proxy link.
@@ -296,17 +297,26 @@ func collectDockerStats(p *database.Proxy) {
 }
 
 // ExtractKey extracts the 32-hex (16-byte) key from a panel secret.
-// Panel stores "ee" + 32hex_key + domain_hex; telemt stores just the 32hex key.
+//
+// 32 hex chars (16 bytes): "simple" mode — the whole string IS the key
+// (the leading 0xEE byte is part of the key, NOT a mode marker).
+//
+// >32 hex chars: proper fake-TLS — strip "ee"/"dd" prefix, first 32 hex = key.
 func ExtractKey(secret string) string {
+	if len(secret) <= 32 {
+		s := secret
+		for len(s) < 32 {
+			s += "0"
+		}
+		return s
+	}
+	// Longer secret: ee + 32hex_key + domain_hex
 	raw := secret
 	if len(raw) >= 2 && (raw[:2] == "ee" || raw[:2] == "dd") {
 		raw = raw[2:]
 	}
 	if len(raw) > 32 {
 		raw = raw[:32]
-	}
-	for len(raw) < 32 {
-		raw += "0"
 	}
 	return raw
 }

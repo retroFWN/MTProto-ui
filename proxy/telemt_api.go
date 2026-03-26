@@ -76,7 +76,7 @@ func telemtAddUser(apiPort int, username, secret string, maxConns int, quotaByte
 		Username: username,
 	}
 
-	// Extract the 32-hex key (strip ee prefix + domain suffix)
+	// Extract the 32-hex key (for 32-char secrets: use as-is; for longer: strip prefix+domain)
 	req.Secret = ExtractKey(secret)
 
 	if maxConns > 0 {

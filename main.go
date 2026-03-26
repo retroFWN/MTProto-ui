@@ -2,9 +2,11 @@ package main
 
 import (
 	"crypto/tls"
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 
 	"golang.org/x/crypto/acme/autocert"
@@ -16,6 +18,38 @@ import (
 )
 
 func main() {
+	testMode := flag.Bool("test", false, "spin up C + Rust proxies on test ports, print tg:// links, wait for Ctrl+C")
+	testIP := flag.String("test-ip", "", "server IP for test tg:// links (auto-detect if empty)")
+	testDomain := flag.String("test-domain", "google.com", "fake-TLS domain for test proxies")
+	testPortC := flag.Int("test-port-c", 10443, "port for C proxy in test mode")
+	testPortRust := flag.Int("test-port-rust", 10444, "port for Rust proxy in test mode")
+	flag.Parse()
+
+	if *testMode {
+		// Minimal init — just need proxy backends + DataHostPath
+		cfg := config.Load()
+		proxy.ContainerPfx = cfg.ContainerPfx
+		proxy.DockerHostIP = cfg.DockerHostIP
+		proxy.DataHostPath = cfg.DataHostPath
+
+		ip := *testIP
+		if ip == "" {
+			// Quick auto-detect
+			ip = os.Getenv("TEST_SERVER_IP")
+		}
+		if ip == "" {
+			ip = "YOUR_SERVER_IP"
+		}
+
+		proxy.RunTestMode(proxy.TestConfig{
+			ServerIP:     ip,
+			Domain:       *testDomain,
+			PortOfficial: *testPortC,
+			PortTelemt:   *testPortRust,
+		})
+		return
+	}
+
 	cfg := config.Load()
 
 	database.Init(cfg.DBPath)

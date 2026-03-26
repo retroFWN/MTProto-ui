@@ -90,7 +90,7 @@ func generateConfigTOML(port int, secrets []string, domain string) string {
 
 	sb.WriteString("[access.users]\n")
 	for i, s := range secrets {
-		// Extract the 32-hex key (strip ee prefix + domain suffix)
+		// Extract the 32-hex key (for 32-char secrets: use as-is; for longer: strip prefix+domain)
 		sb.WriteString(fmt.Sprintf("user_%d = \"%s\"\n", i, ExtractKey(s)))
 	}
 
