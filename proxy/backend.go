@@ -19,7 +19,7 @@ type BackendInfo struct {
 // Backend is the interface every proxy engine must implement.
 type Backend interface {
 	Info() BackendInfo
-	BuildRunArgs(containerName string, port int, secrets []string, domain string) []string
+	BuildRunArgs(containerName string, port int, secrets []string, domain string, adTag string) []string
 	PullImage() error
 }
 

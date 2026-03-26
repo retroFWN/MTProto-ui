@@ -45,7 +45,7 @@ func BuildTgLink(serverIP string, port int, secret, backend, domain string) stri
 
 // ── Container lifecycle ──────────────────────────────────────────────────
 
-func StartProxy(proxyID uint, port int, secrets []string, domain string, backendID string) (string, error) {
+func StartProxy(proxyID uint, port int, secrets []string, domain string, backendID string, adTag string) (string, error) {
 	if len(secrets) == 0 {
 		return "", fmt.Errorf("no secrets provided")
 	}
@@ -54,7 +54,7 @@ func StartProxy(proxyID uint, port int, secrets []string, domain string, backend
 	StopProxy(proxyID)
 
 	backend := GetBackend(backendID)
-	args := backend.BuildRunArgs(name, port, secrets, domain)
+	args := backend.BuildRunArgs(name, port, secrets, domain, adTag)
 
 	out, err := exec.Command("docker", args...).Output()
 	if err != nil {
@@ -73,8 +73,8 @@ func StopProxy(proxyID uint) {
 	exec.Command("docker", "rm", name).Run()
 }
 
-func RestartProxy(proxyID uint, port int, secrets []string, domain string, backendID string) (string, error) {
-	return StartProxy(proxyID, port, secrets, domain, backendID)
+func RestartProxy(proxyID uint, port int, secrets []string, domain string, backendID string, adTag string) (string, error) {
+	return StartProxy(proxyID, port, secrets, domain, backendID, adTag)
 }
 
 // ── Container info ───────────────────────────────────────────────────────
@@ -357,7 +357,7 @@ func ExpiryChecker() {
 					// Official: restart container with remaining secrets
 					secrets := database.GetEnabledSecrets(p.ID)
 					if len(secrets) > 0 {
-						cid, err := StartProxy(p.ID, p.Port, secrets, p.FakeTLSDomain, p.Backend)
+						cid, err := StartProxy(p.ID, p.Port, secrets, p.FakeTLSDomain, p.Backend, p.AdTag)
 						if err == nil {
 							database.DB.Model(&p).Update("container_id", cid)
 						}

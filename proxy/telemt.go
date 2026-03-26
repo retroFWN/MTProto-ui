@@ -50,11 +50,14 @@ func TelemtMetricsPort(proxyPort int) int {
 }
 
 // generateConfigTOML creates a telemt config.toml with users and settings.
-func generateConfigTOML(port int, secrets []string, domain string) string {
+func generateConfigTOML(port int, secrets []string, domain string, adTag string) string {
 	var sb strings.Builder
 
 	sb.WriteString("[general]\n")
 	sb.WriteString("use_middle_proxy = true\n")
+	if adTag != "" {
+		sb.WriteString(fmt.Sprintf("tag = \"%s\"\n", adTag))
+	}
 	sb.WriteString("log_level = \"normal\"\n\n")
 
 	sb.WriteString("[general.modes]\n")
@@ -101,13 +104,13 @@ func generateConfigTOML(port int, secrets []string, domain string) string {
 // Set via DATA_HOST_PATH env when running inside Docker (DinD via socket).
 var DataHostPath string
 
-func (b *TelemtBackend) BuildRunArgs(containerName string, port int, secrets []string, domain string) []string {
+func (b *TelemtBackend) BuildRunArgs(containerName string, port int, secrets []string, domain string, adTag string) []string {
 	// Generate config and write to data directory.
 	// Dir 0777 + file 0666: telemt API does atomic saves via .tmp files in the same dir.
 	configDir := filepath.Join("data", "telemt", containerName)
 	os.MkdirAll(configDir, 0777)
 	configPath := filepath.Join(configDir, "telemt.toml")
-	configContent := generateConfigTOML(port, secrets, domain)
+	configContent := generateConfigTOML(port, secrets, domain, adTag)
 	os.WriteFile(configPath, []byte(configContent), 0666)
 
 	// Resolve the volume mount path for the host

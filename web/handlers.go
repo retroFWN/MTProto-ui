@@ -195,6 +195,7 @@ func ListProxies(c *gin.Context) {
 			"name":               p.Name,
 			"port":               p.Port,
 			"fake_tls_domain":    p.FakeTLSDomain,
+			"ad_tag":             p.AdTag,
 			"backend":            p.Backend,
 			"enabled":            p.Enabled,
 			"container_id":       p.ContainerID,
@@ -214,6 +215,7 @@ func CreateProxy(c *gin.Context) {
 		Name          string `json:"name" binding:"required"`
 		Port          int    `json:"port" binding:"required"`
 		FakeTLSDomain string `json:"fake_tls_domain"`
+		AdTag         string `json:"ad_tag"`
 		Backend       string `json:"backend"`
 		TrafficLimit  int64  `json:"traffic_total_limit"`
 	}
@@ -240,6 +242,7 @@ func CreateProxy(c *gin.Context) {
 		Name:          req.Name,
 		Port:          req.Port,
 		FakeTLSDomain: req.FakeTLSDomain,
+		AdTag:         req.AdTag,
 		Backend:       req.Backend,
 		TrafficLimit:  req.TrafficLimit,
 		Enabled:       true,
@@ -256,7 +259,7 @@ func CreateProxy(c *gin.Context) {
 	database.DB.Create(&client)
 
 	secrets := database.GetEnabledSecrets(p.ID)
-	containerID, err := proxy.StartProxy(p.ID, p.Port, secrets, p.FakeTLSDomain, p.Backend)
+	containerID, err := proxy.StartProxy(p.ID, p.Port, secrets, p.FakeTLSDomain, p.Backend, p.AdTag)
 	if err == nil {
 		database.DB.Model(&p).Update("container_id", containerID)
 	}
@@ -279,6 +282,7 @@ func UpdateProxy(c *gin.Context) {
 		Name          *string `json:"name"`
 		Port          *int    `json:"port"`
 		FakeTLSDomain *string `json:"fake_tls_domain"`
+		AdTag         *string `json:"ad_tag"`
 		Enabled       *bool   `json:"enabled"`
 		TrafficLimit  *int64  `json:"traffic_total_limit"`
 	}
@@ -299,6 +303,10 @@ func UpdateProxy(c *gin.Context) {
 		p.FakeTLSDomain = *req.FakeTLSDomain
 		needRestart = true
 	}
+	if req.AdTag != nil && *req.AdTag != p.AdTag {
+		p.AdTag = *req.AdTag
+		needRestart = true
+	}
 	if req.Enabled != nil {
 		p.Enabled = *req.Enabled
 		needRestart = true
@@ -312,7 +320,7 @@ func UpdateProxy(c *gin.Context) {
 		if p.Enabled {
 			secrets := database.GetEnabledSecrets(p.ID)
 			if len(secrets) > 0 {
-				cid, _ := proxy.RestartProxy(p.ID, p.Port, secrets, p.FakeTLSDomain, p.Backend)
+				cid, _ := proxy.RestartProxy(p.ID, p.Port, secrets, p.FakeTLSDomain, p.Backend, p.AdTag)
 				database.DB.Model(&p).Update("container_id", cid)
 			}
 		} else {
@@ -357,7 +365,7 @@ func StartProxyHandler(c *gin.Context) {
 		return
 	}
 
-	cid, err := proxy.StartProxy(p.ID, p.Port, secrets, p.FakeTLSDomain, p.Backend)
+	cid, err := proxy.StartProxy(p.ID, p.Port, secrets, p.FakeTLSDomain, p.Backend, p.AdTag)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"detail": err.Error()})
 		return
@@ -399,7 +407,7 @@ func RestartProxyHandler(c *gin.Context) {
 		return
 	}
 
-	cid, err := proxy.RestartProxy(p.ID, p.Port, secrets, p.FakeTLSDomain, p.Backend)
+	cid, err := proxy.RestartProxy(p.ID, p.Port, secrets, p.FakeTLSDomain, p.Backend, p.AdTag)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"detail": err.Error()})
 		return

@@ -66,6 +66,7 @@
             <div class="mb-3"><label data-i18n="label_name"></label><input type="text" id="proxyName" data-i18n-placeholder="placeholder_proxy_name"></div>
             <div class="mb-3"><label data-i18n="label_port"></label><input type="number" id="proxyPort" value="443"></div>
             <div class="mb-3"><label data-i18n="label_fake_tls_domain"></label><input type="text" id="proxyDomain" value="google.com"></div>
+            <div class="mb-3"><label data-i18n="label_ad_tag"></label><input type="text" id="proxyAdTag" data-i18n-placeholder="placeholder_ad_tag"></div>
             <div class="mb-4">
                 <label data-i18n="label_proxy_engine"></label>
                 <div class="engine-toggle">
@@ -102,6 +103,23 @@
         </div>
     </div>
 
+    <!-- Edit Proxy Modal -->
+    <div id="editModal" class="modal-overlay">
+        <div class="modal">
+            <h3 data-i18n="modal_edit_proxy"></h3>
+            <input type="hidden" id="editProxyId">
+            <div class="mb-3"><label data-i18n="label_name"></label><input type="text" id="editProxyName"></div>
+            <div class="mb-3"><label data-i18n="label_port"></label><input type="number" id="editProxyPort"></div>
+            <div class="mb-3"><label data-i18n="label_fake_tls_domain"></label><input type="text" id="editProxyDomain"></div>
+            <div class="mb-3"><label data-i18n="label_ad_tag"></label><input type="text" id="editProxyAdTag" data-i18n-placeholder="placeholder_ad_tag"></div>
+            <div class="mb-4"><label data-i18n="label_traffic_limit"></label><input type="number" id="editProxyTrafficLimit" value="0"></div>
+            <div class="flex gap-2" style="justify-content:flex-end">
+                <button class="btn btn-outline" onclick="hideModal('editModal')"><span data-i18n="btn_cancel"></span></button>
+                <button class="btn btn-primary" onclick="saveProxy()"><span data-i18n="btn_save"></span></button>
+            </div>
+        </div>
+    </div>
+
     <!-- Logs Modal -->
     <div id="logsModal" class="modal-overlay">
         <div class="modal" style="max-width:700px">
@@ -119,6 +137,7 @@
     applyI18n();
     let liveData = {};
     let proxyMeta = {};
+    let proxyData = {};
     let clientCache = {};
     let initialized = false;
 
@@ -172,12 +191,13 @@
                             <i class="fas fa-server text-xl" style="color:${running?'var(--success)':'var(--danger)'}"></i>
                             <div>
                                 <h3 class="font-bold text-lg">${p.name}</h3>
-                                <span class="text-sm" style="color:var(--text-secondary)">Port: ${p.port} | ${p.fake_tls_domain} | ${engineBadge} | ${badge}</span>
+                                <span class="text-sm" style="color:var(--text-secondary)">Port: ${p.port} | ${p.fake_tls_domain} | ${engineBadge} | ${badge}${p.ad_tag ? ' | <i class="fas fa-ad"></i> AD' : ''}</span>
                                 ${isTelemt && running ? ` <span class="live-badge"><i class="fas fa-chart-bar"></i> ${t('live_stats_badge')}</span>` : ''}
                             </div>
                         </div>
                         <div class="flex gap-2">
                             ${controls}
+                            <button class="btn btn-outline btn-sm" onclick="showEditModal(${p.id})" title="${t('btn_edit')}"><i class="fas fa-pen"></i></button>
                             <button class="btn btn-outline btn-sm" onclick="showLogs(${p.id})"><i class="fas fa-file-alt"></i></button>
                             <button class="btn btn-danger btn-sm" onclick="deleteProxy(${p.id})"><i class="fas fa-trash"></i></button>
                         </div>
@@ -200,6 +220,7 @@
             el.innerHTML = html;
             for (const p of proxies) {
                 proxyMeta[p.id] = { backend: p.backend, running: p.status.running };
+                proxyData[p.id] = p;
                 loadClients(p.id, p.backend, p.status.running);
             }
             initialized = true;
@@ -298,9 +319,37 @@
                 name: document.getElementById('proxyName').value,
                 port: parseInt(document.getElementById('proxyPort').value),
                 fake_tls_domain: document.getElementById('proxyDomain').value,
+                ad_tag: document.getElementById('proxyAdTag').value,
                 backend: document.getElementById('proxyBackend').value,
             })});
             hideModal('createModal'); toast(t('toast_proxy_created')); loadProxies();
+        } catch (e) { toast(e.message, 'error'); }
+    }
+
+    function showEditModal(id) {
+        const p = proxyData[id];
+        if (!p) return;
+        document.getElementById('editProxyId').value = p.id;
+        document.getElementById('editProxyName').value = p.name;
+        document.getElementById('editProxyPort').value = p.port;
+        document.getElementById('editProxyDomain').value = p.fake_tls_domain;
+        document.getElementById('editProxyAdTag').value = p.ad_tag || '';
+        document.getElementById('editProxyTrafficLimit').value = p.traffic_total_limit || 0;
+        applyI18n();
+        document.getElementById('editModal').classList.add('active');
+    }
+
+    async function saveProxy() {
+        const id = document.getElementById('editProxyId').value;
+        try {
+            await api(`/api/proxies/${id}`, { method: 'PUT', body: JSON.stringify({
+                name: document.getElementById('editProxyName').value,
+                port: parseInt(document.getElementById('editProxyPort').value),
+                fake_tls_domain: document.getElementById('editProxyDomain').value,
+                ad_tag: document.getElementById('editProxyAdTag').value,
+                traffic_total_limit: parseInt(document.getElementById('editProxyTrafficLimit').value),
+            })});
+            hideModal('editModal'); toast(t('toast_proxy_saved')); loadProxies();
         } catch (e) { toast(e.message, 'error'); }
     }
 
