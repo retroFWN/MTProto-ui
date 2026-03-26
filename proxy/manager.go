@@ -22,9 +22,10 @@ func ContainerName(proxyID uint) string {
 
 // ── Secret generation ────────────────────────────────────────────────────
 
+// GenerateSecret creates an ee-prefixed 32-char secret for the official C proxy.
+// Format: ee + domain_hex + random = 32 chars total.
 func GenerateSecret(fakeTLSDomain string) string {
 	domainHex := hex.EncodeToString([]byte(fakeTLSDomain))
-	// ee (2) + 30 hex = 32 chars total — proxy expects exactly 32 hex chars
 	needed := 30 - len(domainHex)
 	if needed > 0 {
 		randBytes := make([]byte, (needed+1)/2)
@@ -32,6 +33,25 @@ func GenerateSecret(fakeTLSDomain string) string {
 		return "ee" + domainHex + hex.EncodeToString(randBytes)[:needed]
 	}
 	return "ee" + domainHex[:30]
+}
+
+// GenerateTelemtSecret creates a raw 32-hex secret for telemt Rust proxy.
+// Telemt handles the ee prefix and domain in its link generation internally.
+func GenerateTelemtSecret() string {
+	b := make([]byte, 16)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+// BuildTgLink generates the tg:// proxy link for the appropriate backend.
+func BuildTgLink(serverIP string, port int, secret, backend, domain string) string {
+	if backend == "telemt" {
+		// telemt format: ee + raw_secret + hex(domain)
+		domainHex := hex.EncodeToString([]byte(domain))
+		return fmt.Sprintf("tg://proxy?server=%s&port=%d&secret=ee%s%s", serverIP, port, secret, domainHex)
+	}
+	// official format: secret already contains ee prefix
+	return fmt.Sprintf("tg://proxy?server=%s&port=%d&secret=%s", serverIP, port, secret)
 }
 
 // ── Container lifecycle ──────────────────────────────────────────────────
@@ -287,9 +307,24 @@ func collectDockerStats(p *database.Proxy) {
 	}
 }
 
-// MatchSecret compares a panel secret with a telemt secret.
+// MatchSecret compares a panel secret with a telemt API secret.
 func MatchSecret(panelSecret, telemtSecret string) bool {
-	return strings.EqualFold(panelSecret, telemtSecret)
+	// Direct match (telemt backend stores raw 32-hex)
+	if strings.EqualFold(panelSecret, telemtSecret) {
+		return true
+	}
+	// Fallback: strip ee prefix and pad for comparison
+	raw := panelSecret
+	if len(raw) > 2 && raw[:2] == "ee" {
+		raw = raw[2:]
+	}
+	for len(raw) < 32 {
+		raw += "0"
+	}
+	if len(raw) > 32 {
+		raw = raw[:32]
+	}
+	return strings.EqualFold(raw, telemtSecret)
 }
 
 func ExpiryChecker() {

@@ -246,7 +246,12 @@ func CreateProxy(c *gin.Context) {
 	}
 	database.DB.Create(&p)
 
-	secret := proxy.GenerateSecret(req.FakeTLSDomain)
+	var secret string
+	if req.Backend == "telemt" {
+		secret = proxy.GenerateTelemtSecret()
+	} else {
+		secret = proxy.GenerateSecret(req.FakeTLSDomain)
+	}
 	client := database.Client{
 		ProxyID: p.ID,
 		Name:    "default",
@@ -527,7 +532,7 @@ func ListClients(c *gin.Context) {
 			"expiry_time":   cl.ExpiryTime,
 			"last_online":   cl.LastOnline,
 			"created_at":    cl.CreatedAt,
-			"tg_link":       fmt.Sprintf("tg://proxy?server=%s&port=%d&secret=%s", serverIP, p.Port, cl.Secret),
+			"tg_link":       proxy.BuildTgLink(serverIP, p.Port, cl.Secret, p.Backend, p.FakeTLSDomain),
 		})
 	}
 	c.JSON(http.StatusOK, result)
@@ -554,7 +559,12 @@ func CreateClient(c *gin.Context) {
 		return
 	}
 
-	secret := proxy.GenerateSecret(p.FakeTLSDomain)
+	var secret string
+	if p.Backend == "telemt" {
+		secret = proxy.GenerateTelemtSecret()
+	} else {
+		secret = proxy.GenerateSecret(p.FakeTLSDomain)
+	}
 	cl := database.Client{
 		ProxyID:      p.ID,
 		Name:         req.Name,
@@ -577,7 +587,7 @@ func CreateClient(c *gin.Context) {
 		"success": true,
 		"id":      cl.ID,
 		"secret":  secret,
-		"tg_link": fmt.Sprintf("tg://proxy?server=%s&port=%d&secret=%s", serverIP, p.Port, secret),
+		"tg_link": proxy.BuildTgLink(serverIP, p.Port, secret, p.Backend, p.FakeTLSDomain),
 	})
 }
 
