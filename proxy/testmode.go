@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // TestConfig holds settings for the quick test mode.
@@ -96,8 +97,19 @@ func RunTestMode(tc TestConfig) {
 			cid = cid[:12]
 		}
 		log.Printf("[%s] container %s started (ID: %s)", p.label, p.name, cid)
-		started = append(started, p)
 
+		// Health check — wait and verify container is still alive
+		time.Sleep(3 * time.Second)
+		inspect, _ := exec.Command("docker", "inspect", "--format", "{{.State.Running}}", p.name).Output()
+		if strings.TrimSpace(string(inspect)) != "true" {
+			log.Printf("[%s] CRASHED — container logs:", p.label)
+			logs, _ := exec.Command("docker", "logs", p.name).CombinedOutput()
+			fmt.Println(string(logs))
+			exec.Command("docker", "rm", p.name).Run()
+			continue
+		}
+
+		started = append(started, p)
 		link := BuildTgLink(tc.ServerIP, p.port, secret, p.backend, tc.Domain)
 		fmt.Printf("\n  %s  port %d\n  %s\n", p.label, p.port, link)
 	}
