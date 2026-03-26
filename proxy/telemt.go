@@ -102,12 +102,13 @@ func generateConfigTOML(port int, secrets []string, domain string) string {
 var DataHostPath string
 
 func (b *TelemtBackend) BuildRunArgs(containerName string, port int, secrets []string, domain string) []string {
-	// Generate config and write to data directory
+	// Generate config and write to data directory.
+	// Dir 0777 + file 0666: telemt API does atomic saves via .tmp files in the same dir.
 	configDir := filepath.Join("data", "telemt", containerName)
-	os.MkdirAll(configDir, 0755)
+	os.MkdirAll(configDir, 0777)
 	configPath := filepath.Join(configDir, "telemt.toml")
 	configContent := generateConfigTOML(port, secrets, domain)
-	os.WriteFile(configPath, []byte(configContent), 0644)
+	os.WriteFile(configPath, []byte(configContent), 0666)
 
 	// Resolve the volume mount path for the host
 	var hostConfigDir string
