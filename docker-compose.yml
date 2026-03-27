@@ -8,6 +8,8 @@ services:
       # Порты 80/443 раскомментировать только при включении PANEL_DOMAIN (auto-SSL)
       # - "80:80"
       # - "443:443"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
