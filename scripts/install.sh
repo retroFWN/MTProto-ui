@@ -55,6 +55,19 @@ if docker ps -a --format '{{.Names}}' | grep -q '^mtproxy-panel$'; then
     docker rm mtproxy-panel 2>/dev/null
 fi
 
+# Pre-build telemt (Rust) proxy image
+echo -e "${YELLOW}Building telemt (Rust) proxy image...${NC}"
+if ! docker images -q telemt-local 2>/dev/null | grep -q .; then
+    docker build -t telemt-local https://github.com/telemt/telemt.git
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}telemt image built successfully.${NC}"
+    else
+        echo -e "${RED}Failed to build telemt image. Rust backend will not be available.${NC}"
+    fi
+else
+    echo -e "${GREEN}telemt image already exists, skipping build.${NC}"
+fi
+
 # Build and start via Docker Compose
 echo -e "${YELLOW}Building and starting panel...${NC}"
 docker compose up -d --build

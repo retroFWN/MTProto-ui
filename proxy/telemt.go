@@ -140,14 +140,13 @@ func (b *TelemtBackend) BuildRunArgs(containerName string, port int, secrets []s
 }
 
 func (b *TelemtBackend) PullImage() error {
-	log.Printf("Building telemt image: docker build -t %s https://github.com/telemt/telemt.git", telemtImage)
+	log.Printf("Building telemt image (this may take several minutes)...")
 	out, err := exec.Command("docker", "build", "-t", telemtImage, "https://github.com/telemt/telemt.git").CombinedOutput()
 	if err != nil {
-		log.Printf("telemt build failed: %v\nOutput: %s", err, string(out))
-	} else {
-		log.Printf("telemt image built successfully")
+		return fmt.Errorf("docker build failed: %v\n%s", err, string(out))
 	}
-	return err
+	log.Printf("telemt image built successfully")
+	return nil
 }
 
 // ── UserManager interface ───────────────────────────────────────────────
