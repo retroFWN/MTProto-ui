@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -139,10 +140,14 @@ func (b *TelemtBackend) BuildRunArgs(containerName string, port int, secrets []s
 }
 
 func (b *TelemtBackend) PullImage() error {
-	cmd := exec.Command("docker", "build", "-t", telemtImage, "https://github.com/telemt/telemt.git")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	log.Printf("Building telemt image: docker build -t %s https://github.com/telemt/telemt.git", telemtImage)
+	out, err := exec.Command("docker", "build", "-t", telemtImage, "https://github.com/telemt/telemt.git").CombinedOutput()
+	if err != nil {
+		log.Printf("telemt build failed: %v\nOutput: %s", err, string(out))
+	} else {
+		log.Printf("telemt image built successfully")
+	}
+	return err
 }
 
 // ── UserManager interface ───────────────────────────────────────────────
