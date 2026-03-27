@@ -139,7 +139,10 @@ func (b *TelemtBackend) BuildRunArgs(containerName string, port int, secrets []s
 }
 
 func (b *TelemtBackend) PullImage() error {
-	return exec.Command("docker", "build", "-t", telemtImage, "https://github.com/telemt/telemt.git").Run()
+	cmd := exec.Command("docker", "build", "-t", telemtImage, "https://github.com/telemt/telemt.git")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 // ── UserManager interface ───────────────────────────────────────────────

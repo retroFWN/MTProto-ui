@@ -58,18 +58,25 @@ func RunTestMode(tc TestConfig) {
 	var started []testProxy
 
 	// Pull/build missing images before starting
+	imageReady := make(map[string]bool)
 	for _, p := range proxies {
 		backend := GetBackend(p.backend)
 		img := backend.Info().Image
 		if out, _ := exec.Command("docker", "images", "-q", img).Output(); len(strings.TrimSpace(string(out))) == 0 {
-			log.Printf("Image %s not found, pulling...", img)
+			log.Printf("Image %s not found, building/pulling...", img)
 			if err := backend.PullImage(); err != nil {
-				log.Printf("Failed to pull %s: %v", img, err)
+				log.Printf("Failed to get image %s: %v", img, err)
+				continue
 			}
 		}
+		imageReady[p.backend] = true
 	}
 
 	for _, p := range proxies {
+		if !imageReady[p.backend] {
+			log.Printf("[%s] image not available, skipping", p.label)
+			continue
+		}
 		backend := GetBackend(p.backend)
 		if backend == nil {
 			log.Printf("[%s] backend not found, skipping", p.label)
