@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -28,7 +29,19 @@ type telemtUsersResponse struct {
 		TotalOctets        int64    `json:"total_octets"`
 		ActiveUniqueIPs    int      `json:"active_unique_ips"`
 		ActiveIPList       []string `json:"active_unique_ips_list"`
+		Links              struct {
+			Classic []string `json:"classic"`
+		} `json:"links"`
 	} `json:"data"`
+}
+
+// extractSecretFromLink parses "secret" query param from a tg://proxy link.
+func extractSecretFromLink(link string) string {
+	u, err := url.Parse(link)
+	if err != nil {
+		return ""
+	}
+	return u.Query().Get("secret")
 }
 
 func telemtListUsers(apiPort int) ([]UserStats, error) {
@@ -49,9 +62,14 @@ func telemtListUsers(apiPort int) ([]UserStats, error) {
 
 	users := make([]UserStats, 0, len(result.Data))
 	for _, u := range result.Data {
+		secret := u.Secret
+		// telemt doesn't return "secret" field — extract from classic link
+		if secret == "" && len(u.Links.Classic) > 0 {
+			secret = extractSecretFromLink(u.Links.Classic[0])
+		}
 		users = append(users, UserStats{
 			Username:           u.Username,
-			Secret:             u.Secret,
+			Secret:             secret,
 			CurrentConnections: u.CurrentConnections,
 			TotalOctets:        u.TotalOctets,
 			ActiveUniqueIPs:    u.ActiveUniqueIPs,
