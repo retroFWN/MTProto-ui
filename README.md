@@ -108,6 +108,22 @@ ports:
   - "443:443"
 ```
 
+## Тест-режим
+
+Быстрая проверка без панели — поднимает по одному контейнеру C и Rust прокси, выводит `tg://` ссылки и ждёт Ctrl+C:
+
+```bash
+docker compose run --rm --entrypoint "" panel ./mtproxy-panel --test --test-ip IP_СЕРВЕРА
+```
+
+| Флаг | По умолчанию | Описание |
+|---|---|---|
+| `--test` | — | Включить тест-режим |
+| `--test-ip` | авто | IP сервера для ссылок |
+| `--test-domain` | `google.com` | Домен Fake TLS |
+| `--test-port-c` | `10443` | Порт для Official (C) |
+| `--test-port-rust` | `10444` | Порт для telemt (Rust) |
+
 ## Обновление
 
 ```bash
