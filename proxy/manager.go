@@ -54,11 +54,22 @@ func StartProxy(proxyID uint, port int, secrets []string, domain string, backend
 	StopProxy(proxyID)
 
 	backend := GetBackend(backendID)
-	args := backend.BuildRunArgs(name, port, secrets, domain, adTag)
 
-	out, err := exec.Command("docker", args...).Output()
+	// Auto-pull image if missing
+	img := backend.Info().Image
+	if out, _ := exec.Command("docker", "images", "-q", img).Output(); len(strings.TrimSpace(string(out))) == 0 {
+		log.Printf("Image %s not found, pulling...", img)
+		if err := backend.PullImage(); err != nil {
+			return "", fmt.Errorf("failed to pull image %s: %w", img, err)
+		}
+	}
+
+	args := backend.BuildRunArgs(name, port, secrets, domain, adTag)
+	log.Printf("Starting container: docker %s", strings.Join(args, " "))
+
+	out, err := exec.Command("docker", args...).CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("docker run failed: %w", err)
+		return "", fmt.Errorf("docker run failed: %s", strings.TrimSpace(string(out)))
 	}
 
 	containerID := strings.TrimSpace(string(out))
