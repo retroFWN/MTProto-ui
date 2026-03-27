@@ -353,14 +353,51 @@
         } catch (e) { toast(e.message, 'error'); }
     }
 
-    async function deleteProxy(id) { if (!confirm(t('confirm_delete_proxy'))) return; try { await api(`/api/proxies/${id}`, { method: 'DELETE' }); toast(t('toast_proxy_deleted')); loadProxies(); } catch (e) { toast(e.message, 'error'); } }
+    let actionInProgress = false;
+
+    async function deleteProxy(id) {
+        if (actionInProgress || !confirm(t('confirm_delete_proxy'))) return;
+        actionInProgress = true;
+        setCardLoading(id, true);
+        try {
+            await api(`/api/proxies/${id}`, { method: 'DELETE' });
+            toast(t('toast_proxy_deleted'));
+            delete proxyData[id]; delete proxyMeta[id]; delete clientCache[id];
+            await loadProxies();
+        } catch (e) { toast(e.message, 'error'); }
+        actionInProgress = false;
+    }
     const proxyActionToast = { start: 'toast_proxy_started', stop: 'toast_proxy_stopped', restart: 'toast_proxy_restarted' };
     async function proxyAction(id, action) {
+        if (actionInProgress) return;
+        actionInProgress = true;
+        setCardLoading(id, true);
         try {
             await api(`/api/proxies/${id}/${action}`, { method: 'POST' });
             toast(t(proxyActionToast[action]));
-            loadProxies();
-        } catch (e) { toast(e.message, 'error'); }
+            await loadProxies();
+        } catch (e) { toast(e.message, 'error'); setCardLoading(id, false); }
+        actionInProgress = false;
+    }
+
+    function setCardLoading(id, loading) {
+        const cards = document.querySelectorAll('.card');
+        for (const card of cards) {
+            const btns = card.querySelectorAll('button');
+            for (const b of btns) {
+                const onclick = b.getAttribute('onclick') || '';
+                if (onclick.includes(`(${id}`) || onclick.includes(`(${id},`)) {
+                    if (loading) {
+                        card.style.opacity = '0.5';
+                        card.style.pointerEvents = 'none';
+                    } else {
+                        card.style.opacity = '';
+                        card.style.pointerEvents = '';
+                    }
+                    return;
+                }
+            }
+        }
     }
     async function showLogs(id) { try { const d = await api(`/api/proxies/${id}/logs?tail=100`); document.getElementById('logsContent').textContent = d.logs || t('no_logs'); document.getElementById('logsModal').classList.add('active'); } catch (e) { toast(e.message, 'error'); } }
 

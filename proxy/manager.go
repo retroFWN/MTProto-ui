@@ -69,8 +69,8 @@ func StartProxy(proxyID uint, port int, secrets []string, domain string, backend
 
 func StopProxy(proxyID uint) {
 	name := ContainerName(proxyID)
-	exec.Command("docker", "stop", name).Run()
-	exec.Command("docker", "rm", name).Run()
+	exec.Command("docker", "stop", "-t", "2", name).Run()
+	exec.Command("docker", "rm", "-f", name).Run()
 }
 
 func RestartProxy(proxyID uint, port int, secrets []string, domain string, backendID string, adTag string) (string, error) {
