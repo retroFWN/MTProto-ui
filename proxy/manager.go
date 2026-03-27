@@ -333,11 +333,21 @@ func ExtractKey(secret string) string {
 }
 
 // MatchSecret compares a panel secret with a telemt API secret.
+// telemt may strip the ee/dd prefix, so we try multiple variants.
 func MatchSecret(panelSecret, telemtSecret string) bool {
 	if strings.EqualFold(panelSecret, telemtSecret) {
 		return true
 	}
-	return strings.EqualFold(ExtractKey(panelSecret), telemtSecret)
+	if strings.EqualFold(ExtractKey(panelSecret), telemtSecret) {
+		return true
+	}
+	// telemt strips ee/dd prefix even from short (32-char) secrets
+	if len(panelSecret) >= 2 && (panelSecret[:2] == "ee" || panelSecret[:2] == "dd") {
+		if strings.EqualFold(panelSecret[2:], telemtSecret) {
+			return true
+		}
+	}
+	return false
 }
 
 func ExpiryChecker() {
