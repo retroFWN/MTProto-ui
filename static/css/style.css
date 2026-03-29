@@ -123,6 +123,21 @@ tr:hover { background: rgba(59,130,246,.05); }
 code { font-size: 12px; cursor: pointer; background: var(--bg-primary); padding: 2px 6px; border-radius: 4px; }
 pre { background: var(--bg-primary); padding: 12px; border-radius: 8px; max-height: 400px; overflow: auto; font-size: 12px; white-space: pre-wrap; }
 
+/* Client cards */
+.client-card { background: var(--bg-primary); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+.client-card + .client-card { margin-top: 10px; }
+.client-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.client-card-secret { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; background: rgba(0,0,0,.25); padding: 8px 12px; border-radius: 8px; }
+.client-card-secret code { flex: 1; background: none; padding: 0; font-size: 13px; color: var(--text-secondary); letter-spacing: .5px; }
+.client-card-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 16px; margin-bottom: 14px; }
+.client-card-stat .stat-label { margin-bottom: 2px; font-size: 12px; }
+.client-card-stat .stat-value-sm { font-weight: 600; font-size: 14px; }
+.client-card-actions { display: flex; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--border); padding-top: 12px; }
+.client-card-actions .btn { font-size: 12px; padding: 5px 10px; }
+.client-card .progress-bar { margin-top: 6px; margin-bottom: 0; }
+.traffic-pct { font-size: 11px; color: var(--text-secondary); margin-left: 6px; }
+@media (min-width: 768px) { .client-card-grid.grid-4 { grid-template-columns: repeat(4, 1fr); } }
+
 /* Language switcher */
 .lang-switcher { display: flex; gap: 4px; margin-bottom: 8px; padding: 0 20px; }
 .lang-btn { background: transparent; border: 1px solid var(--border); color: var(--text-secondary); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all .2s; }

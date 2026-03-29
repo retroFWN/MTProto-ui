@@ -143,6 +143,24 @@
 
     function onLangChange() { applyI18n(); refresh(); }
 
+    function formatExpiry(unix) {
+        if (!unix || unix === 0) return t('expiry_permanent');
+        const now = Math.floor(Date.now() / 1000);
+        if (unix < now) return `<span style="color:var(--danger)">${t('expiry_expired')}</span>`;
+        const d = new Date(unix * 1000);
+        const dateStr = d.toLocaleDateString(localStorage.getItem('lang') || 'en', { day:'2-digit', month:'2-digit', year:'numeric' });
+        return t('expiry_until', {date: dateStr});
+    }
+
+    function formatRelativeTime(unix) {
+        if (!unix || unix === 0) return t('time_never');
+        const diff = Math.floor(Date.now() / 1000) - unix;
+        if (diff < 60) return t('time_just_now');
+        if (diff < 3600) return t('time_min_ago', {n: Math.floor(diff/60)});
+        if (diff < 86400) return t('time_hour_ago', {n: Math.floor(diff/3600)});
+        return t('time_day_ago', {n: Math.floor(diff/86400)});
+    }
+
     function selectEngine(el) {
         el.parentElement.querySelectorAll('.engine-btn').forEach(b => b.classList.remove('active'));
         el.classList.add('active');
@@ -238,48 +256,85 @@
             const liveMap = {};
             for (const u of live) { liveMap[u.client_id] = u; }
 
-            let extraHeaders = '';
-            if (isTelemt) {
-                extraHeaders = `<th>${t('table_header_online')}</th><th>${t('table_header_conns')}</th><th>${t('table_header_ips')}</th>`;
-            }
-
-            let html = `<table><thead><tr><th>${t('table_header_name')}</th><th>${t('table_header_secret')}</th><th>${t('table_header_status')}</th><th>${t('table_header_traffic')}</th>${extraHeaders}<th>${t('table_header_link')}</th><th>${t('table_header_actions')}</th></tr></thead><tbody>`;
+            let html = '';
             for (const c of clients) {
-                const badge = c.enabled ? `<span class="badge badge-success">${t('client_active')}</span>` : `<span class="badge badge-danger">${t('client_disabled')}</span>`;
-                const traffic = formatBytes(c.traffic_up + c.traffic_down) + (c.traffic_limit > 0 ? ' / ' + formatBytes(c.traffic_limit) : '');
+                const badge = c.enabled
+                    ? `<span class="badge badge-success">${t('client_active')}</span>`
+                    : `<span class="badge badge-danger">${t('client_disabled')}</span>`;
 
-                let extraCols = '';
-                if (isTelemt) {
-                    const u = liveMap[c.id];
-                    if (u) {
-                        const onlineDot = u.current_connections > 0
-                            ? '<span class="live-dot online"></span>'
-                            : '<span class="live-dot offline"></span>';
-                        const ips = (u.active_ips || []).join(', ');
-                        extraCols = `
-                            <td>${onlineDot} ${u.current_connections > 0 ? t('client_online') : t('client_offline')}</td>
-                            <td class="font-bold">${u.current_connections}</td>
-                            <td class="ip-list">${u.active_unique_ips} ${ips ? '(' + ips + ')' : ''}</td>`;
-                    } else {
-                        extraCols = `<td><span class="live-dot offline"></span> —</td><td>—</td><td>—</td>`;
-                    }
+                const totalTraffic = c.traffic_up + c.traffic_down;
+                const trafficText = formatBytes(totalTraffic) + (c.traffic_limit > 0 ? ' / ' + formatBytes(c.traffic_limit) : '');
+                const limitText = c.traffic_limit > 0 ? '' : `<div style="color:var(--text-secondary);font-size:11px">${t('traffic_no_limit')}</div>`;
+
+                let progressHtml = '';
+                if (c.traffic_limit > 0) {
+                    const pct = Math.min(100, Math.round(totalTraffic / c.traffic_limit * 100));
+                    const color = pct >= 90 ? 'var(--danger)' : pct >= 70 ? 'var(--warning)' : 'var(--success)';
+                    progressHtml = `<div class="progress-bar"><div class="progress-bar-fill" style="width:${pct}%;background:${color}"></div></div>`;
                 }
 
-                html += `<tr>
-                    <td class="font-medium">${c.name}</td>
-                    <td><code onclick="copyToClipboard('${c.secret}')" title="${t('click_to_copy')}">${c.secret.substring(0,8)}...${c.secret.slice(-6)}</code></td>
-                    <td>${badge}</td>
-                    <td>${traffic}</td>
-                    ${extraCols}
-                    <td><button class="btn btn-outline btn-sm" onclick="copyToClipboard('${c.tg_link}')" title="${t('copy_tg_link')}"><i class="fas fa-link"></i></button></td>
-                    <td><div class="flex gap-2">
-                        <button class="btn btn-outline btn-sm" onclick="toggleClient(${proxyId},${c.id},${!c.enabled})"><i class="fas fa-${c.enabled?'pause':'play'}"></i></button>
-                        <button class="btn btn-outline btn-sm" onclick="resetTraffic(${proxyId},${c.id})"><i class="fas fa-undo"></i></button>
-                        <button class="btn btn-danger btn-sm" onclick="deleteClient(${proxyId},${c.id})"><i class="fas fa-trash"></i></button>
-                    </div></td>
-                </tr>`;
+                // Live stats (telemt only)
+                let liveStatsHtml = '';
+                if (isTelemt) {
+                    const u = liveMap[c.id];
+                    const isOnline = u && u.current_connections > 0;
+                    const dot = isOnline ? '<span class="live-dot online"></span>' : '<span class="live-dot offline"></span>';
+                    const onlineText = isOnline ? t('client_online') : t('client_offline');
+                    const conns = u ? u.current_connections : 0;
+                    const ips = u ? u.active_unique_ips : 0;
+                    const ipList = (u && u.active_ips && u.active_ips.length) ? `<div style="font-size:11px;color:var(--text-secondary)">${u.active_ips.join(', ')}</div>` : '';
+
+                    liveStatsHtml = `
+                        <div class="client-card-stat">
+                            <div class="stat-label">${t('client_online_label')}</div>
+                            <div class="stat-value-sm">${dot} ${onlineText}</div>
+                        </div>
+                        <div class="client-card-stat">
+                            <div class="stat-label">${t('client_connections_label')}</div>
+                            <div class="stat-value-sm">${conns}<span class="traffic-pct">${ips} IP</span></div>
+                            ${ipList}
+                        </div>`;
+                }
+
+                const gridClass = isTelemt ? 'client-card-grid grid-4' : 'client-card-grid';
+
+                html += `<div class="client-card">
+                    <div class="client-card-header">
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium">${c.name}</span>
+                            ${badge}
+                        </div>
+                        <div class="flex gap-2">
+                            <button class="btn btn-outline btn-sm" onclick="toggleClient(${proxyId},${c.id},${!c.enabled})" title="${c.enabled ? t('toast_disabled') : t('toast_enabled')}"><i class="fas fa-${c.enabled?'pause':'play'}"></i></button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteClient(${proxyId},${c.id})" title="${t('toast_deleted')}"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="client-card-secret">
+                        <code onclick="copyToClipboard('${c.secret}')" title="${t('click_to_copy')}">${c.secret}</code>
+                        <button class="btn btn-outline btn-sm" onclick="copyToClipboard('${c.secret}')"><i class="fas fa-copy"></i></button>
+                    </div>
+
+                    <div class="${gridClass}">
+                        <div class="client-card-stat">
+                            <div class="stat-label">${t('client_traffic_label')}</div>
+                            <div class="stat-value-sm">${trafficText}</div>
+                            ${limitText}
+                            ${progressHtml}
+                        </div>
+                        <div class="client-card-stat">
+                            <div class="stat-label">${t('client_expiry_label')}</div>
+                            <div class="stat-value-sm">${formatExpiry(c.expiry_time)}</div>
+                        </div>
+                        ${liveStatsHtml}
+                    </div>
+
+                    <div class="client-card-actions">
+                        <button class="btn btn-outline btn-sm" onclick="copyToClipboard('${c.tg_link}')"><i class="fas fa-link mr-1"></i>${t('btn_copy_link')}</button>
+                        <button class="btn btn-outline btn-sm" onclick="resetTraffic(${proxyId},${c.id})"><i class="fas fa-undo mr-1"></i>${t('btn_reset_traffic')}</button>
+                    </div>
+                </div>`;
             }
-            html += '</tbody></table>';
             clientCache[proxyId] = html;
             el.innerHTML = html;
         } catch (e) { console.error(e); }
