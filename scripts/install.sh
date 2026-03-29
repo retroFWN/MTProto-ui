@@ -70,7 +70,7 @@ fi
 
 # Build and start via Docker Compose
 echo -e "${YELLOW}Building and starting panel...${NC}"
-docker compose up -d --build
+docker compose up -d --build --wait
 if [ $? -ne 0 ]; then
     echo -e "${RED}Docker Compose failed! Check logs: docker compose logs${NC}"
     exit 1

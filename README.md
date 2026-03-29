@@ -46,13 +46,10 @@ systemctl enable --now docker
 ```bash
 git clone https://github.com/retroFWN/MTProto-ui.git
 cd MTProto-ui
-docker compose up -d --build
+docker compose up -d --build --wait
 ```
 
-> :information_source: При первом запуске панель автоматически соберёт образ `telemt-local` (Rust-прокси) из исходников. Это может занять несколько минут. Если хотите собрать заранее:
-> ```bash
-> docker build -t telemt-local https://github.com/telemt/telemt.git
-> ```
+> :information_source: При первом запуске автоматически соберётся образ `telemt-local` (Rust-прокси) из исходников — это может занять несколько минут. Команда дождётся полной готовности панели.
 
 ### 3. Открыть панель
 
@@ -134,7 +131,7 @@ docker compose run --rm --entrypoint "" panel ./mtproxy-panel --test --test-ip I
 ```bash
 cd /opt/MTProto-ui
 git pull
-docker compose up -d --build
+docker compose up -d --build --wait
 ```
 
 ## Стек
