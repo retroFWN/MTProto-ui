@@ -45,8 +45,8 @@ func BuildTgLink(serverIP string, port int, secret, backend, domain string) stri
 
 // ── Container lifecycle ──────────────────────────────────────────────────
 
-func StartProxy(proxyID uint, port int, secrets []string, domain string, backendID string, adTag string) (string, error) {
-	if len(secrets) == 0 {
+func StartProxy(proxyID uint, port int, clients []ClientEntry, domain string, backendID string, adTag string) (string, error) {
+	if len(clients) == 0 {
 		return "", fmt.Errorf("no secrets provided")
 	}
 
@@ -64,7 +64,7 @@ func StartProxy(proxyID uint, port int, secrets []string, domain string, backend
 		}
 	}
 
-	args := backend.BuildRunArgs(name, port, secrets, domain, adTag)
+	args := backend.BuildRunArgs(name, port, clients, domain, adTag)
 	log.Printf("Starting container: docker %s", strings.Join(args, " "))
 
 	out, err := exec.Command("docker", args...).CombinedOutput()
@@ -74,7 +74,13 @@ func StartProxy(proxyID uint, port int, secrets []string, domain string, backend
 
 	containerID := strings.TrimSpace(string(out))
 	log.Printf("Started container %s (ID: %.12s) with %d secret(s) [%s]",
-		name, containerID, len(secrets), backend.Info().Name)
+		name, containerID, len(clients), backend.Info().Name)
+
+	// For telemt: sync user quotas/expiry after container is ready
+	if backendID == "telemt" {
+		go syncTelemtUsersAfterStart(port, clients)
+	}
+
 	return containerID, nil
 }
 
@@ -84,8 +90,33 @@ func StopProxy(proxyID uint) {
 	exec.Command("docker", "rm", "-f", name).Run()
 }
 
-func RestartProxy(proxyID uint, port int, secrets []string, domain string, backendID string, adTag string) (string, error) {
-	return StartProxy(proxyID, port, secrets, domain, backendID, adTag)
+func RestartProxy(proxyID uint, port int, clients []ClientEntry, domain string, backendID string, adTag string) (string, error) {
+	return StartProxy(proxyID, port, clients, domain, backendID, adTag)
+}
+
+// ClientEntriesFromDB converts database clients to ClientEntry slice.
+func ClientEntriesFromDB(clients []database.Client) []ClientEntry {
+	entries := make([]ClientEntry, len(clients))
+	for i, cl := range clients {
+		entries[i] = ClientEntry{
+			ID:           cl.ID,
+			Secret:       cl.Secret,
+			TrafficLimit: cl.TrafficLimit,
+			ExpiryTime:   cl.ExpiryTime,
+		}
+	}
+	return entries
+}
+
+// RefreshConfig regenerates the telemt config file from current DB state.
+// No-op for non-telemt backends.
+func RefreshConfig(p *database.Proxy) {
+	if p.Backend != "telemt" {
+		return
+	}
+	dbClients := database.GetEnabledClients(p.ID)
+	entries := ClientEntriesFromDB(dbClients)
+	UpdateTelemtConfig(p.ID, p.Port, entries, p.FakeTLSDomain, p.AdTag)
 }
 
 // ── Container info ───────────────────────────────────────────────────────
@@ -218,6 +249,7 @@ func TrafficCollector(intervalSec int) {
 				database.DB.Where("proxy_id = ?", p.ID).Find(&clients)
 
 				var totalDeltaDown, totalDeltaUp int64
+				needConfigRefresh := false
 				for j := range clients {
 					cl := &clients[j]
 					for _, u := range users {
@@ -246,10 +278,16 @@ func TrafficCollector(intervalSec int) {
 								um.RemoveUser(p.Port, u.Username)
 								log.Printf("Client %s (proxy %d) disabled: traffic limit exceeded (%d/%d)",
 									cl.Name, p.ID, newDown+newUp, cl.TrafficLimit)
+								needConfigRefresh = true
 							}
 							break
 						}
 					}
+				}
+
+				// Update config so disabled users stay gone after container restart
+				if needConfigRefresh {
+					RefreshConfig(p)
 				}
 
 				if totalDeltaDown > 0 || totalDeltaUp > 0 {
@@ -374,11 +412,14 @@ func ExpiryChecker() {
 					for _, cl := range cls {
 						um.RemoveUser(p.Port, fmt.Sprintf("user_%d", cl.ID))
 					}
+					// Update config file for future container restarts
+					RefreshConfig(&p)
 				} else {
 					// Official: restart container with remaining secrets
-					secrets := database.GetEnabledSecrets(p.ID)
-					if len(secrets) > 0 {
-						cid, err := StartProxy(p.ID, p.Port, secrets, p.FakeTLSDomain, p.Backend, p.AdTag)
+					dbClients := database.GetEnabledClients(p.ID)
+					entries := ClientEntriesFromDB(dbClients)
+					if len(entries) > 0 {
+						cid, err := StartProxy(p.ID, p.Port, entries, p.FakeTLSDomain, p.Backend, p.AdTag)
 						if err == nil {
 							database.DB.Model(&p).Update("container_id", cid)
 						}

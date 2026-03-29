@@ -87,7 +87,7 @@ func RunTestMode(tc TestConfig) {
 		exec.Command("docker", "stop", p.name).Run()
 		exec.Command("docker", "rm", p.name).Run()
 
-		args := backend.BuildRunArgs(p.name, p.port, []string{secret}, tc.Domain, "")
+		args := backend.BuildRunArgs(p.name, p.port, []ClientEntry{{ID: 0, Secret: secret}}, tc.Domain, "")
 		log.Printf("[%s] docker %s", p.label, strings.Join(args, " "))
 
 		out, err := exec.Command("docker", args...).CombinedOutput()

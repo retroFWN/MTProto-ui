@@ -258,8 +258,9 @@ func CreateProxy(c *gin.Context) {
 	}
 	database.DB.Create(&client)
 
-	secrets := database.GetEnabledSecrets(p.ID)
-	containerID, err := proxy.StartProxy(p.ID, p.Port, secrets, p.FakeTLSDomain, p.Backend, p.AdTag)
+	dbClients := database.GetEnabledClients(p.ID)
+	entries := proxy.ClientEntriesFromDB(dbClients)
+	containerID, err := proxy.StartProxy(p.ID, p.Port, entries, p.FakeTLSDomain, p.Backend, p.AdTag)
 	if err == nil {
 		database.DB.Model(&p).Update("container_id", containerID)
 	}
@@ -318,9 +319,10 @@ func UpdateProxy(c *gin.Context) {
 
 	if needRestart {
 		if p.Enabled {
-			secrets := database.GetEnabledSecrets(p.ID)
-			if len(secrets) > 0 {
-				cid, _ := proxy.RestartProxy(p.ID, p.Port, secrets, p.FakeTLSDomain, p.Backend, p.AdTag)
+			dbClients := database.GetEnabledClients(p.ID)
+			entries := proxy.ClientEntriesFromDB(dbClients)
+			if len(entries) > 0 {
+				cid, _ := proxy.RestartProxy(p.ID, p.Port, entries, p.FakeTLSDomain, p.Backend, p.AdTag)
 				database.DB.Model(&p).Update("container_id", cid)
 			}
 		} else {
@@ -359,13 +361,14 @@ func StartProxyHandler(c *gin.Context) {
 		return
 	}
 
-	secrets := database.GetEnabledSecrets(p.ID)
-	if len(secrets) == 0 {
+	dbClients := database.GetEnabledClients(p.ID)
+	entries := proxy.ClientEntriesFromDB(dbClients)
+	if len(entries) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"detail": "No enabled client secrets"})
 		return
 	}
 
-	cid, err := proxy.StartProxy(p.ID, p.Port, secrets, p.FakeTLSDomain, p.Backend, p.AdTag)
+	cid, err := proxy.StartProxy(p.ID, p.Port, entries, p.FakeTLSDomain, p.Backend, p.AdTag)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"detail": err.Error()})
 		return
@@ -401,13 +404,14 @@ func RestartProxyHandler(c *gin.Context) {
 		return
 	}
 
-	secrets := database.GetEnabledSecrets(p.ID)
-	if len(secrets) == 0 {
+	dbClients := database.GetEnabledClients(p.ID)
+	entries := proxy.ClientEntriesFromDB(dbClients)
+	if len(entries) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"detail": "No enabled client secrets"})
 		return
 	}
 
-	cid, err := proxy.RestartProxy(p.ID, p.Port, secrets, p.FakeTLSDomain, p.Backend, p.AdTag)
+	cid, err := proxy.RestartProxy(p.ID, p.Port, entries, p.FakeTLSDomain, p.Backend, p.AdTag)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"detail": err.Error()})
 		return
@@ -573,11 +577,23 @@ func CreateClient(c *gin.Context) {
 	}
 	database.DB.Create(&cl)
 
-	// Sync to telemt API if running
+	// Sync to proxy engine
 	backend := proxy.GetBackend(p.Backend)
 	if um, ok := backend.(proxy.UserManager); ok {
+		// Telemt: add via API + update config for future restarts
 		username := fmt.Sprintf("user_%d", cl.ID)
 		um.AddUser(p.Port, username, secret, 0, req.TrafficLimit, req.ExpiryTime)
+		proxy.RefreshConfig(&p)
+	} else if p.Enabled {
+		// Official: restart container to pick up new secret
+		dbClients := database.GetEnabledClients(p.ID)
+		entries := proxy.ClientEntriesFromDB(dbClients)
+		if len(entries) > 0 {
+			cid, err := proxy.RestartProxy(p.ID, p.Port, entries, p.FakeTLSDomain, p.Backend, p.AdTag)
+			if err == nil {
+				database.DB.Model(&p).Update("container_id", cid)
+			}
+		}
 	}
 
 	serverIP := database.GetServerIP()
@@ -616,6 +632,11 @@ func UpdateClient(c *gin.Context) {
 		return
 	}
 
+	// Track what changed for proxy sync
+	enabledChanged := req.Enabled != nil && *req.Enabled != cl.Enabled
+	limitsChanged := (req.TrafficLimit != nil && *req.TrafficLimit != cl.TrafficLimit) ||
+		(req.ExpiryTime != nil && *req.ExpiryTime != cl.ExpiryTime)
+
 	updates := map[string]interface{}{}
 	if req.Name != nil {
 		updates["name"] = *req.Name
@@ -630,6 +651,51 @@ func UpdateClient(c *gin.Context) {
 		updates["expiry_time"] = *req.ExpiryTime
 	}
 	database.DB.Model(&cl).Updates(updates)
+
+	// Sync changes to proxy engine
+	if enabledChanged || limitsChanged {
+		var p database.Proxy
+		if database.DB.First(&p, proxyID).Error == nil && p.Enabled {
+			backend := proxy.GetBackend(p.Backend)
+			if um, ok := backend.(proxy.UserManager); ok {
+				username := fmt.Sprintf("user_%d", cl.ID)
+				if req.Enabled != nil && !*req.Enabled {
+					// Disabling client: remove from running proxy
+					um.RemoveUser(p.Port, username)
+				} else {
+					// Re-enabling or changing limits: remove + re-add with new params
+					newLimit := cl.TrafficLimit
+					if req.TrafficLimit != nil {
+						newLimit = *req.TrafficLimit
+					}
+					newExpiry := cl.ExpiryTime
+					if req.ExpiryTime != nil {
+						newExpiry = *req.ExpiryTime
+					}
+					um.RemoveUser(p.Port, username)
+					um.AddUser(p.Port, username, cl.Secret, 0, newLimit, newExpiry)
+				}
+				// Update config for future container restarts
+				proxy.RefreshConfig(&p)
+			} else if enabledChanged {
+				// Official: restart container with updated secret list
+				dbClients := database.GetEnabledClients(p.ID)
+				entries := proxy.ClientEntriesFromDB(dbClients)
+				if len(entries) > 0 {
+					cid, err := proxy.RestartProxy(p.ID, p.Port, entries, p.FakeTLSDomain, p.Backend, p.AdTag)
+					if err == nil {
+						database.DB.Model(&p).Update("container_id", cid)
+					}
+				} else {
+					proxy.StopProxy(p.ID)
+					database.DB.Model(&p).Updates(map[string]interface{}{
+						"enabled": false, "container_id": "",
+					})
+				}
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
@@ -643,11 +709,12 @@ func DeleteClient(c *gin.Context) {
 		return
 	}
 
-	// Remove from telemt API if applicable
+	// Remove from proxy engine
 	var p database.Proxy
 	if database.DB.First(&p, proxyID).Error == nil {
 		backend := proxy.GetBackend(p.Backend)
 		if um, ok := backend.(proxy.UserManager); ok {
+			// Telemt: remove user via API
 			username := fmt.Sprintf("user_%d", clientID)
 			um.RemoveUser(p.Port, username)
 		}
@@ -658,6 +725,31 @@ func DeleteClient(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"detail": "Client not found"})
 		return
 	}
+
+	// Update proxy state after deletion
+	if p.ID > 0 && p.Enabled {
+		backend := proxy.GetBackend(p.Backend)
+		if _, ok := backend.(proxy.UserManager); ok {
+			// Telemt: update config file for future container restarts
+			proxy.RefreshConfig(&p)
+		} else {
+			// Official: restart container without deleted secret
+			dbClients := database.GetEnabledClients(p.ID)
+			entries := proxy.ClientEntriesFromDB(dbClients)
+			if len(entries) > 0 {
+				cid, err := proxy.RestartProxy(p.ID, p.Port, entries, p.FakeTLSDomain, p.Backend, p.AdTag)
+				if err == nil {
+					database.DB.Model(&p).Update("container_id", cid)
+				}
+			} else {
+				proxy.StopProxy(p.ID)
+				database.DB.Model(&p).Updates(map[string]interface{}{
+					"enabled": false, "container_id": "",
+				})
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
@@ -671,13 +763,39 @@ func ResetClientTraffic(c *gin.Context) {
 		return
 	}
 
-	result := database.DB.Model(&database.Client{}).
-		Where("id = ? AND proxy_id = ?", clientID, proxyID).
-		Updates(map[string]interface{}{"traffic_up": 0, "traffic_down": 0})
-	if result.RowsAffected == 0 {
+	var cl database.Client
+	if database.DB.Where("id = ? AND proxy_id = ?", clientID, proxyID).First(&cl).Error != nil {
 		c.JSON(http.StatusNotFound, gin.H{"detail": "Client not found"})
 		return
 	}
+
+	wasDisabled := !cl.Enabled
+	database.DB.Model(&cl).Updates(map[string]interface{}{
+		"traffic_up": 0, "traffic_down": 0, "enabled": true,
+	})
+
+	// Re-add to proxy if client was disabled (e.g. by traffic limit)
+	if wasDisabled {
+		var p database.Proxy
+		if database.DB.First(&p, proxyID).Error == nil && p.Enabled {
+			backend := proxy.GetBackend(p.Backend)
+			if um, ok := backend.(proxy.UserManager); ok {
+				username := fmt.Sprintf("user_%d", cl.ID)
+				um.AddUser(p.Port, username, cl.Secret, 0, cl.TrafficLimit, cl.ExpiryTime)
+				proxy.RefreshConfig(&p)
+			} else {
+				dbClients := database.GetEnabledClients(p.ID)
+				entries := proxy.ClientEntriesFromDB(dbClients)
+				if len(entries) > 0 {
+					cid, err := proxy.RestartProxy(p.ID, p.Port, entries, p.FakeTLSDomain, p.Backend, p.AdTag)
+					if err == nil {
+						database.DB.Model(&p).Update("container_id", cid)
+					}
+				}
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 

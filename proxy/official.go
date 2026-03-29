@@ -30,20 +30,20 @@ func (b *OfficialBackend) Info() BackendInfo {
 	}
 }
 
-func (b *OfficialBackend) BuildRunArgs(containerName string, port int, secrets []string, domain string, adTag string) []string {
+func (b *OfficialBackend) BuildRunArgs(containerName string, port int, clients []ClientEntry, domain string, adTag string) []string {
 	args := []string{
 		"run", "-d",
 		"--name", containerName,
 		"--restart", "unless-stopped",
 		"-p", fmt.Sprintf("%d:443", port),
-		"-e", fmt.Sprintf("SECRET=%s", secrets[0]),
+		"-e", fmt.Sprintf("SECRET=%s", clients[0].Secret),
 	}
 	if adTag != "" {
 		args = append(args, "-e", fmt.Sprintf("TAG=%s", adTag))
 	}
 	args = append(args, "telegrammessenger/proxy")
-	for _, s := range secrets[1:] {
-		args = append(args, "-S", s)
+	for _, cl := range clients[1:] {
+		args = append(args, "-S", cl.Secret)
 	}
 	return args
 }

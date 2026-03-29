@@ -131,6 +131,12 @@ func GetEnabledSecrets(proxyID uint) []string {
 	return secrets
 }
 
+func GetEnabledClients(proxyID uint) []Client {
+	var clients []Client
+	DB.Where("proxy_id = ? AND enabled = ?", proxyID, true).Find(&clients)
+	return clients
+}
+
 func DisableExpiredClients() (int, []Client) {
 	now := time.Now().Unix()
 

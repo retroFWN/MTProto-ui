@@ -19,7 +19,7 @@ type BackendInfo struct {
 // Backend is the interface every proxy engine must implement.
 type Backend interface {
 	Info() BackendInfo
-	BuildRunArgs(containerName string, port int, secrets []string, domain string, adTag string) []string
+	BuildRunArgs(containerName string, port int, clients []ClientEntry, domain string, adTag string) []string
 	PullImage() error
 }
 
@@ -51,6 +51,14 @@ type ProxySummary struct {
 	ConnectionsTotal   int64 `json:"connections_total"`
 	ConfiguredUsers    int   `json:"configured_users"`
 	CurrentConnections int64 `json:"current_connections"`
+}
+
+// ClientEntry carries per-client data needed by backends (config + API sync).
+type ClientEntry struct {
+	ID           uint
+	Secret       string
+	TrafficLimit int64
+	ExpiryTime   int64
 }
 
 // ── Registry ────────────────────────────────────────────────────────────
