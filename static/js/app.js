@@ -5,11 +5,8 @@ function getCsrfToken() {
 }
 
 async function api(url, options = {}) {
-    const defaults = {
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
-        credentials: 'same-origin',
-    };
-    const res = await fetch(url, { ...defaults, ...options });
+    const headers = { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken(), ...(options.headers || {}) };
+    const res = await fetch(url, { credentials: 'same-origin', ...options, headers });
     if (res.status === 401) {
         window.location.href = '/';
         return;
