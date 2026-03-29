@@ -49,6 +49,11 @@ cd MTProto-ui
 docker compose up -d --build
 ```
 
+> :information_source: При первом запуске панель автоматически соберёт образ `telemt-local` (Rust-прокси) из исходников. Это может занять несколько минут. Если хотите собрать заранее:
+> ```bash
+> docker build -t telemt-local https://github.com/telemt/telemt.git
+> ```
+
 ### 3. Открыть панель
 
 ```
@@ -66,7 +71,7 @@ http://IP_СЕРВЕРА:8080
 
 | | Official (C) | telemt (Rust) |
 |---|:---:|:---:|
-| **Образ** | `telegrammessenger/proxy` | `whn0thacked/telemt-docker` |
+| **Образ** | `telegrammessenger/proxy` | `telemt-local` (собирается из исходников) |
 | **Fake TLS** | v1 | v2 |
 | **Per-user статистика** | :x: | :white_check_mark: |
 | **Management API** | :x: | :white_check_mark: |

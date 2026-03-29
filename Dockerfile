@@ -23,6 +23,9 @@ COPY --from=builder /build/bot ./bot
 RUN pip3 install --no-cache-dir --break-system-packages -r bot/requirements.txt
 RUN mkdir -p /app/data
 
+COPY --from=builder /build/entrypoint.sh .
+RUN chmod +x entrypoint.sh
+
 EXPOSE 8080 80 443
 
-CMD ["./mtproxy-panel"]
+ENTRYPOINT ["./entrypoint.sh"]
