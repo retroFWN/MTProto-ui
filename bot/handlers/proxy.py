@@ -1,9 +1,7 @@
-"""User-facing proxy commands (admin-only)."""
+"""Proxy list, detail and control via inline keyboards."""
 
-from datetime import datetime
-
-from aiogram import Router, types
-from aiogram.filters import Command
+from aiogram import Router, types, F
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from api import panel
 from config import cfg
@@ -11,172 +9,175 @@ from config import cfg
 router = Router()
 
 
-def is_admin(msg: types.Message) -> bool:
-    if not msg.from_user:
-        return False
-    return msg.from_user.id in cfg.admin_ids
+def is_admin(user_id: int) -> bool:
+    return user_id in cfg.admin_ids
 
 
 def format_bytes(b: int) -> str:
     for unit in ("B", "KB", "MB", "GB", "TB"):
         if abs(b) < 1024:
-            return f"{b:.1f} {unit}"
-        b /= 1024  # type: ignore[assignment]
+            return f"{b:.1f} {unit}" if b != int(b) else f"{int(b)} {unit}"
+        b /= 1024
     return f"{b:.1f} PB"
 
 
-@router.message(Command("proxies"))
-async def cmd_proxies(msg: types.Message) -> None:
-    if not is_admin(msg):
-        await msg.answer("⛔ Нет доступа.")
+# ── Proxy List ────────────────────────────────────────────────────────────
+
+
+@router.callback_query(F.data == "proxies")
+async def cb_proxy_list(cq: types.CallbackQuery) -> None:
+    if not is_admin(cq.from_user.id):
+        await cq.answer("⛔ Нет доступа", show_alert=True)
         return
+    await cq.answer()
 
     try:
         proxies = await panel.list_proxies()
     except Exception as e:
-        await msg.answer(f"Ошибка: {e}")
+        await cq.message.edit_text(f"❌ Ошибка: {e}")
         return
 
     if not proxies:
-        await msg.answer("Нет прокси-серверов.")
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔙 Меню", callback_data="menu")],
+        ])
+        await cq.message.edit_text("📡 Нет прокси-серверов.", reply_markup=kb)
         return
 
-    lines = ["<b>Прокси-серверы:</b>\n"]
+    text = "📡 <b>Прокси-серверы</b>\n"
+    buttons = []
     for p in proxies:
-        status = "🟢" if p.get("status", {}).get("running") else "🔴"
+        running = p.get("status", {}).get("running", False)
+        icon = "🟢" if running else "🔴"
         name = p.get("name", "—")
-        pid = p.get("id")
         port = p.get("port", "?")
+        pid = p.get("id")
         clients = p.get("client_count", 0)
-        lines.append(f"{status} <b>{name}</b> (ID: {pid}) — :{port}, клиентов: {clients}")
+        backend = "Rust" if p.get("backend") == "telemt" else "C"
+        total = format_bytes(p.get("traffic_up", 0) + p.get("traffic_down", 0))
 
-    await msg.answer("\n".join(lines), parse_mode="HTML")
+        text += f"\n{icon} <b>{name}</b> — :{port} ({backend})\n"
+        text += f"    {total} | {clients} кл.\n"
+
+        buttons.append([InlineKeyboardButton(
+            text=f"{icon} {name} — :{port}",
+            callback_data=f"px:{pid}",
+        )])
+
+    buttons.append([InlineKeyboardButton(text="🔙 Меню", callback_data="menu")])
+    await cq.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
 
 
-@router.message(Command("connect"))
-async def cmd_connect(msg: types.Message) -> None:
-    if not is_admin(msg):
-        await msg.answer("⛔ Нет доступа.")
+# ── Proxy Detail ──────────────────────────────────────────────────────────
+
+
+@router.callback_query(F.data.startswith("px:"))
+async def cb_proxy_detail(cq: types.CallbackQuery) -> None:
+    if not is_admin(cq.from_user.id):
+        await cq.answer("⛔ Нет доступа", show_alert=True)
         return
+    await cq.answer()
 
-    args = (msg.text or "").split()
-    if len(args) < 2:
-        await msg.answer("Использование: /connect &lt;proxy_id&gt;", parse_mode="HTML")
-        return
+    proxy_id = int(cq.data.split(":")[1])
 
     try:
-        proxy_id = int(args[1])
-    except ValueError:
-        await msg.answer("Неверный proxy_id.")
-        return
-
-    try:
-        clients = await panel.list_clients(proxy_id)
+        proxies = await panel.list_proxies()
     except Exception as e:
-        await msg.answer(f"Ошибка: {e}")
+        await cq.message.edit_text(f"❌ Ошибка: {e}")
         return
 
-    if not clients:
-        await msg.answer("У этого прокси нет клиентов.")
+    p = next((x for x in proxies if x.get("id") == proxy_id), None)
+    if not p:
+        await cq.message.edit_text("Прокси не найден.")
         return
 
-    lines = [f"<b>Ссылки для прокси #{proxy_id}:</b>\n"]
-    for c in clients:
-        name = c.get("name", "—")
-        enabled = c.get("enabled", True)
-        tg_link = c.get("tg_link", "")
-        if not enabled:
-            lines.append(f"⛔ <s>{name}</s> — отключен")
-            continue
-        lines.append(f"✅ <b>{name}</b>\n<code>{tg_link}</code>")
+    running = p.get("status", {}).get("running", False)
+    status = "🟢 Работает" if running else "🔴 Остановлен"
+    backend = "Rust" if p.get("backend") == "telemt" else "C"
+    up = format_bytes(p.get("traffic_up", 0))
+    down = format_bytes(p.get("traffic_down", 0))
+    total = format_bytes(p.get("traffic_up", 0) + p.get("traffic_down", 0))
+    limit = p.get("traffic_total_limit", 0)
+    limit_str = format_bytes(limit) if limit > 0 else "∞"
+    clients = p.get("client_count", 0)
 
-    await msg.answer("\n".join(lines), parse_mode="HTML")
+    text = (
+        f"📡 <b>{p.get('name', '—')}</b>\n"
+        f"Port: {p.get('port')} | {p.get('fake_tls_domain', '')} | {backend}\n"
+        f"{status}\n\n"
+        f"↑ {up}  ↓ {down}  Σ {total}\n"
+        f"Лимит: {limit_str}\n"
+        f"Клиентов: {clients}"
+    )
 
-
-@router.message(Command("status"))
-async def cmd_status(msg: types.Message) -> None:
-    if not is_admin(msg):
-        await msg.answer("⛔ Нет доступа.")
-        return
-
-    args = (msg.text or "").split()
-    if len(args) < 2:
-        await msg.answer("Использование: /status &lt;proxy_id&gt;", parse_mode="HTML")
-        return
-
-    try:
-        proxy_id = int(args[1])
-    except ValueError:
-        await msg.answer("Неверный proxy_id.")
-        return
-
-    try:
-        clients = await panel.list_clients(proxy_id)
-    except Exception as e:
-        await msg.answer(f"Ошибка: {e}")
-        return
-
-    if not clients:
-        await msg.answer("Нет клиентов.")
-        return
-
-    lines = [f"<b>Клиенты прокси #{proxy_id}:</b>\n"]
-    for c in clients:
-        name = c.get("name", "—")
-        cid = c.get("id")
-        enabled = "✅" if c.get("enabled", True) else "⛔"
-        up = format_bytes(c.get("traffic_up", 0))
-        down = format_bytes(c.get("traffic_down", 0))
-        limit = c.get("traffic_limit", 0)
-        limit_str = format_bytes(limit) if limit > 0 else "∞"
-        expiry = c.get("expiry_time", 0)
-        if expiry and expiry > 0:
-            expiry_str = datetime.fromtimestamp(expiry).strftime("%Y-%m-%d")
-        else:
-            expiry_str = "—"
-        lines.append(
-            f"{enabled} <b>{name}</b> (ID: {cid})\n"
-            f"   ↑ {up}  ↓ {down}  лимит: {limit_str}\n"
-            f"   истекает: {expiry_str}"
-        )
-
-    await msg.answer("\n".join(lines), parse_mode="HTML")
-
-
-@router.message(Command("traffic"))
-async def cmd_traffic(msg: types.Message) -> None:
-    if not is_admin(msg):
-        await msg.answer("⛔ Нет доступа.")
-        return
-
-    args = (msg.text or "").split()
-    if len(args) < 2:
-        await msg.answer("Использование: /traffic &lt;proxy_id&gt;", parse_mode="HTML")
-        return
-
-    try:
-        proxy_id = int(args[1])
-    except ValueError:
-        await msg.answer("Неверный proxy_id.")
-        return
-
-    try:
-        clients = await panel.list_clients(proxy_id)
-    except Exception as e:
-        await msg.answer(f"Ошибка: {e}")
-        return
-
-    total_up = sum(c.get("traffic_up", 0) for c in clients)
-    total_down = sum(c.get("traffic_down", 0) for c in clients)
-
-    lines = [
-        f"<b>Трафик прокси #{proxy_id}:</b>\n",
-        f"Всего ↑ {format_bytes(total_up)}  ↓ {format_bytes(total_down)}\n",
+    row1 = [
+        InlineKeyboardButton(text="👥 Клиенты", callback_data=f"clients:{proxy_id}"),
+        InlineKeyboardButton(text="➕ Добавить", callback_data=f"cl_add:{proxy_id}"),
     ]
-    for c in clients:
-        name = c.get("name", "—")
-        up = format_bytes(c.get("traffic_up", 0))
-        down = format_bytes(c.get("traffic_down", 0))
-        lines.append(f"  • {name}: ↑ {up}  ↓ {down}")
 
-    await msg.answer("\n".join(lines), parse_mode="HTML")
+    if running:
+        row2 = [
+            InlineKeyboardButton(text="⟳ Рестарт", callback_data=f"px_restart:{proxy_id}"),
+            InlineKeyboardButton(text="⏹ Стоп", callback_data=f"px_stop:{proxy_id}"),
+        ]
+    else:
+        row2 = [
+            InlineKeyboardButton(text="▶️ Запуск", callback_data=f"px_start:{proxy_id}"),
+        ]
+
+    row3 = [InlineKeyboardButton(text="🔙 К списку", callback_data="proxies")]
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[row1, row2, row3])
+    await cq.message.edit_text(text, reply_markup=kb)
+
+
+# ── Proxy Actions ─────────────────────────────────────────────────────────
+
+
+@router.callback_query(F.data.startswith("px_start:"))
+async def cb_proxy_start(cq: types.CallbackQuery) -> None:
+    if not is_admin(cq.from_user.id):
+        await cq.answer("⛔", show_alert=True)
+        return
+    proxy_id = int(cq.data.split(":")[1])
+    try:
+        await panel.start_proxy(proxy_id)
+        await cq.answer("✅ Запущен")
+    except Exception as e:
+        await cq.answer(f"❌ {e}", show_alert=True)
+        return
+    # Refresh proxy detail
+    cq.data = f"px:{proxy_id}"
+    await cb_proxy_detail(cq)
+
+
+@router.callback_query(F.data.startswith("px_stop:"))
+async def cb_proxy_stop(cq: types.CallbackQuery) -> None:
+    if not is_admin(cq.from_user.id):
+        await cq.answer("⛔", show_alert=True)
+        return
+    proxy_id = int(cq.data.split(":")[1])
+    try:
+        await panel.stop_proxy(proxy_id)
+        await cq.answer("✅ Остановлен")
+    except Exception as e:
+        await cq.answer(f"❌ {e}", show_alert=True)
+        return
+    cq.data = f"px:{proxy_id}"
+    await cb_proxy_detail(cq)
+
+
+@router.callback_query(F.data.startswith("px_restart:"))
+async def cb_proxy_restart(cq: types.CallbackQuery) -> None:
+    if not is_admin(cq.from_user.id):
+        await cq.answer("⛔", show_alert=True)
+        return
+    proxy_id = int(cq.data.split(":")[1])
+    try:
+        await panel.restart_proxy(proxy_id)
+        await cq.answer("✅ Перезапущен")
+    except Exception as e:
+        await cq.answer(f"❌ {e}", show_alert=True)
+        return
+    cq.data = f"px:{proxy_id}"
+    await cb_proxy_detail(cq)

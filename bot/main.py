@@ -1,10 +1,11 @@
-"""MTProxy Panel Telegram Bot — aiogram v3."""
+"""MTProxy Panel Telegram Bot — aiogram v3 with inline keyboards."""
 
 import asyncio
 import logging
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
+from aiogram.fsm.storage.memory import MemoryStorage
 
 from config import cfg
 from handlers import start, proxy, admin
@@ -15,7 +16,7 @@ log = logging.getLogger(__name__)
 
 async def main() -> None:
     bot = Bot(token=cfg.bot_token, default=DefaultBotProperties(parse_mode="HTML"))
-    dp = Dispatcher()
+    dp = Dispatcher(storage=MemoryStorage())
 
     dp.include_router(start.router)
     dp.include_router(proxy.router)

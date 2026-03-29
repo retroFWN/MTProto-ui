@@ -75,8 +75,12 @@ func NewRouter(cfg *config.Config) *gin.Engine {
 	bot.Use(BotAuth(cfg.SecretKey))
 	{
 		bot.GET("/proxies", ListProxies)
+		bot.POST("/proxies/:id/start", StartProxyHandler)
+		bot.POST("/proxies/:id/stop", StopProxyHandler)
+		bot.POST("/proxies/:id/restart", RestartProxyHandler)
 		bot.GET("/proxies/:id/clients", ListClients)
 		bot.POST("/proxies/:id/clients", CreateClient)
+		bot.PUT("/proxies/:id/clients/:cid", UpdateClient)
 		bot.DELETE("/proxies/:id/clients/:cid", DeleteClient)
 		bot.POST("/proxies/:id/clients/:cid/reset-traffic", ResetClientTraffic)
 		bot.GET("/settings", GetSettings)

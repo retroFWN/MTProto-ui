@@ -23,6 +23,12 @@ class PanelAPI:
                 r.raise_for_status()
                 return await r.json()
 
+    async def _put(self, path: str, json: dict | None = None) -> dict:
+        async with aiohttp.ClientSession() as s:
+            async with s.put(f"{self._base}{path}", headers=self._headers, json=json) as r:
+                r.raise_for_status()
+                return await r.json()
+
     async def _delete(self, path: str) -> dict:
         async with aiohttp.ClientSession() as s:
             async with s.delete(f"{self._base}{path}", headers=self._headers) as r:
@@ -33,6 +39,15 @@ class PanelAPI:
 
     async def list_proxies(self) -> list:
         return await self._get("/bot/api/proxies")
+
+    async def start_proxy(self, proxy_id: int) -> dict:
+        return await self._post(f"/bot/api/proxies/{proxy_id}/start")
+
+    async def stop_proxy(self, proxy_id: int) -> dict:
+        return await self._post(f"/bot/api/proxies/{proxy_id}/stop")
+
+    async def restart_proxy(self, proxy_id: int) -> dict:
+        return await self._post(f"/bot/api/proxies/{proxy_id}/restart")
 
     # --- Clients ---
 
@@ -48,6 +63,11 @@ class PanelAPI:
         if expiry_days > 0:
             payload["expiry_time"] = int(time.time()) + expiry_days * 86400
         return await self._post(f"/bot/api/proxies/{proxy_id}/clients", json=payload)
+
+    async def update_client(self, proxy_id: int, client_id: int, **fields) -> dict:
+        return await self._put(
+            f"/bot/api/proxies/{proxy_id}/clients/{client_id}", json=fields
+        )
 
     async def delete_client(self, proxy_id: int, client_id: int) -> dict:
         return await self._delete(f"/bot/api/proxies/{proxy_id}/clients/{client_id}")
