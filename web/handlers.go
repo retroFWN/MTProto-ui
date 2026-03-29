@@ -774,23 +774,26 @@ func ResetClientTraffic(c *gin.Context) {
 		"traffic_up": 0, "traffic_down": 0, "enabled": true,
 	})
 
-	// Re-add to proxy if client was disabled (e.g. by traffic limit)
-	if wasDisabled {
-		var p database.Proxy
-		if database.DB.First(&p, proxyID).Error == nil && p.Enabled {
-			backend := proxy.GetBackend(p.Backend)
-			if um, ok := backend.(proxy.UserManager); ok {
-				username := fmt.Sprintf("user_%d", cl.ID)
-				um.AddUser(p.Port, username, cl.Secret, 0, cl.TrafficLimit, cl.ExpiryTime)
+	// Sync with proxy engine
+	var p database.Proxy
+	if database.DB.First(&p, proxyID).Error == nil && p.Enabled {
+		backend := proxy.GetBackend(p.Backend)
+		if um, ok := backend.(proxy.UserManager); ok {
+			username := fmt.Sprintf("user_%d", cl.ID)
+			// Always remove+add to reset telemt-side quota counter
+			um.RemoveUser(p.Port, username)
+			um.AddUser(p.Port, username, cl.Secret, 0, cl.TrafficLimit, cl.ExpiryTime)
+			if wasDisabled {
 				proxy.RefreshConfig(&p)
-			} else {
-				dbClients := database.GetEnabledClients(p.ID)
-				entries := proxy.ClientEntriesFromDB(dbClients)
-				if len(entries) > 0 {
-					cid, err := proxy.RestartProxy(p.ID, p.Port, entries, p.FakeTLSDomain, p.Backend, p.AdTag)
-					if err == nil {
-						database.DB.Model(&p).Update("container_id", cid)
-					}
+			}
+		} else if wasDisabled {
+			// Official: restart to re-add the secret
+			dbClients := database.GetEnabledClients(p.ID)
+			entries := proxy.ClientEntriesFromDB(dbClients)
+			if len(entries) > 0 {
+				cid, err := proxy.RestartProxy(p.ID, p.Port, entries, p.FakeTLSDomain, p.Backend, p.AdTag)
+				if err == nil {
+					database.DB.Model(&p).Update("container_id", cid)
 				}
 			}
 		}
