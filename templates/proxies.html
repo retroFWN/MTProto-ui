@@ -112,6 +112,33 @@
         </div>
     </div>
 
+    <!-- Edit Client Modal -->
+    <div id="editClientModal" class="modal-overlay">
+        <div class="modal">
+            <h3 data-i18n="modal_edit_client"></h3>
+            <input type="hidden" id="editClientProxyId">
+            <input type="hidden" id="editClientId">
+            <input type="hidden" id="editClientTrafficLimitOrigBytes" value="0">
+            <div class="mb-3"><label data-i18n="label_client_name"></label><input type="text" id="editClientName"></div>
+            <div class="mb-3"><label data-i18n="label_traffic_limit_gb"></label><input type="number" id="editClientTrafficLimit" value="0" step="0.1" min="0"></div>
+            <div class="mb-4">
+                <label data-i18n="label_expiry_days"></label>
+                <input type="number" id="editClientExpiry" value="0" min="-1">
+                <p id="editClientExpiryInfo" class="mt-2" style="font-size:12px;color:var(--text-secondary)"></p>
+                <div class="flex gap-2 mt-2">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('editClientExpiry').value=7">7д</button>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('editClientExpiry').value=30">30д</button>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('editClientExpiry').value=90">90д</button>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('editClientExpiry').value=-1">∞</button>
+                </div>
+            </div>
+            <div class="flex gap-2" style="justify-content:flex-end">
+                <button class="btn btn-outline" onclick="hideModal('editClientModal')"><span data-i18n="btn_cancel"></span></button>
+                <button class="btn btn-primary" onclick="saveClient()"><span data-i18n="btn_save"></span></button>
+            </div>
+        </div>
+    </div>
+
     <!-- Edit Proxy Modal -->
     <div id="editModal" class="modal-overlay">
         <div class="modal">
@@ -331,6 +358,7 @@
                             ${badge}
                         </div>
                         <div class="flex gap-2">
+                            <button class="btn btn-outline btn-sm" onclick="showEditClientModal(${proxyId},${c.id})" title="${t('btn_edit')}"><i class="fas fa-pen"></i></button>
                             <button class="btn btn-outline btn-sm" onclick="toggleClient(${proxyId},${c.id},${!c.enabled})" title="${c.enabled ? t('toast_disabled') : t('toast_enabled')}"><i class="fas fa-${c.enabled?'pause':'play'}"></i></button>
                             <button class="btn btn-danger btn-sm" onclick="deleteClient(${proxyId},${c.id})" title="${t('toast_deleted')}"><i class="fas fa-trash"></i></button>
                         </div>
@@ -495,6 +523,63 @@
                 expiry_time: expiryUnix,
             })});
             hideModal('addClientModal'); toast(t('toast_client_added')); loadProxies();
+        } catch (e) { toast(e.message, 'error'); }
+    }
+
+    async function showEditClientModal(proxyId, clientId) {
+        try {
+            const clients = await api(`/api/proxies/${proxyId}/clients`);
+            const c = clients.find(x => x.id === clientId);
+            if (!c) { toast('Client not found', 'error'); return; }
+            document.getElementById('editClientProxyId').value = proxyId;
+            document.getElementById('editClientId').value = clientId;
+            document.getElementById('editClientName').value = c.name;
+            document.getElementById('editClientTrafficLimitOrigBytes').value = c.traffic_limit || 0;
+            document.getElementById('editClientTrafficLimit').value = c.traffic_limit > 0 ? parseFloat((c.traffic_limit / 1024 / 1024 / 1024).toFixed(2)) : 0;
+            document.getElementById('editClientExpiry').value = 0;
+            const info = document.getElementById('editClientExpiryInfo');
+            if (c.expiry_time > 0) {
+                const d = new Date(c.expiry_time * 1000);
+                const now = Math.floor(Date.now() / 1000);
+                if (c.expiry_time < now) {
+                    info.innerHTML = `<span style="color:var(--danger)">${t('expiry_expired')}</span>`;
+                } else {
+                    const daysLeft = Math.ceil((c.expiry_time - now) / 86400);
+                    info.textContent = t('expiry_until', {date: d.toLocaleDateString()}) + ` (${daysLeft}d)`;
+                }
+            } else {
+                info.textContent = t('expiry_permanent');
+            }
+            applyI18n();
+            document.getElementById('editClientModal').classList.add('active');
+        } catch (e) { toast(e.message, 'error'); }
+    }
+
+    async function saveClient() {
+        const proxyId = document.getElementById('editClientProxyId').value;
+        const clientId = document.getElementById('editClientId').value;
+        const trafficGb = parseFloat(document.getElementById('editClientTrafficLimit').value) || 0;
+        const expiryDays = parseInt(document.getElementById('editClientExpiry').value) || 0;
+        const origBytes = parseInt(document.getElementById('editClientTrafficLimitOrigBytes').value) || 0;
+        const origGb = parseFloat((origBytes / 1024 / 1024 / 1024).toFixed(2));
+
+        // Use original bytes if user didn't change the GB value (avoids rounding drift)
+        const trafficBytes = (trafficGb === origGb) ? origBytes : (trafficGb > 0 ? Math.round(trafficGb * 1024 * 1024 * 1024) : 0);
+
+        const updates = {
+            name: document.getElementById('editClientName').value,
+            traffic_limit: trafficBytes,
+        };
+        // Expiry: 0 = don't change; >0 = set new expiry from now; -1 = remove expiry (permanent)
+        if (expiryDays > 0) {
+            updates.expiry_time = Math.floor(Date.now() / 1000) + expiryDays * 86400;
+        } else if (expiryDays < 0) {
+            updates.expiry_time = 0;
+        }
+
+        try {
+            await api(`/api/proxies/${proxyId}/clients/${clientId}`, { method: 'PUT', body: JSON.stringify(updates) });
+            hideModal('editClientModal'); toast(t('toast_client_saved')); const m = proxyMeta[proxyId]||{}; loadClients(proxyId, m.backend, m.running);
         } catch (e) { toast(e.message, 'error'); }
     }
 
