@@ -232,8 +232,8 @@
                         <div class="flex items-center gap-3">
                             <i class="fas fa-server text-xl" style="color:${running?'var(--success)':'var(--danger)'}"></i>
                             <div>
-                                <h3 class="font-bold text-lg">${p.name}</h3>
-                                <span class="text-sm" style="color:var(--text-secondary)">Port: ${p.port} | ${p.fake_tls_domain} | ${engineBadge} | ${badge}${p.ad_tag ? ' | <i class="fas fa-ad"></i> AD' : ''}</span>
+                                <h3 class="font-bold text-lg">${esc(p.name)}</h3>
+                                <span class="text-sm" style="color:var(--text-secondary)">Port: ${p.port} | ${esc(p.fake_tls_domain)} | ${engineBadge} | ${badge}${p.ad_tag ? ' | <i class="fas fa-ad"></i> AD' : ''}</span>
                                 ${isTelemt && running ? ` <span class="live-badge"><i class="fas fa-chart-bar"></i> ${t('live_stats_badge')}</span>` : ''}
                             </div>
                         </div>
@@ -327,7 +327,7 @@
                 html += `<div class="client-card">
                     <div class="client-card-header">
                         <div class="flex items-center gap-2">
-                            <span class="font-medium">${c.name}</span>
+                            <span class="font-medium">${esc(c.name)}</span>
                             ${badge}
                         </div>
                         <div class="flex gap-2">
@@ -337,8 +337,8 @@
                     </div>
 
                     <div class="client-card-secret">
-                        <code onclick="copyToClipboard('${c.secret}')" title="${t('click_to_copy')}">${c.secret}</code>
-                        <button class="btn btn-outline btn-sm" onclick="copyToClipboard('${c.secret}')"><i class="fas fa-copy"></i></button>
+                        <code onclick="copyToClipboard('${esc(c.secret)}')" title="${t('click_to_copy')}">${esc(c.secret)}</code>
+                        <button class="btn btn-outline btn-sm" onclick="copyToClipboard('${esc(c.secret)}')"><i class="fas fa-copy"></i></button>
                     </div>
 
                     <div class="${gridClass}">
@@ -356,7 +356,7 @@
                     </div>
 
                     <div class="client-card-actions">
-                        <button class="btn btn-outline btn-sm" onclick="copyToClipboard('${c.tg_link}')"><i class="fas fa-link mr-1"></i>${t('btn_copy_link')}</button>
+                        <button class="btn btn-outline btn-sm" onclick="copyToClipboard('${esc(c.tg_link)}')"><i class="fas fa-link mr-1"></i>${t('btn_copy_link')}</button>
                         <button class="btn btn-outline btn-sm" onclick="resetTraffic(${proxyId},${c.id})"><i class="fas fa-undo mr-1"></i>${t('btn_reset_traffic')}</button>
                     </div>
                 </div>`;

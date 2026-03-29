@@ -241,6 +241,8 @@ func TrafficCollector(intervalSec int) {
 			if um, ok := backend.(UserManager); ok {
 				users, err := um.ListUsers(p.Port)
 				if err != nil {
+					log.Printf("Warning: telemt API unreachable for proxy %d (port %d): %v — falling back to docker stats",
+						p.ID, p.Port, err)
 					collectDockerStats(p)
 					continue
 				}

@@ -339,6 +339,7 @@
             const res = await fetch('/api/upload-cert', {
                 method: 'POST', body: form,
                 credentials: 'include',
+                headers: { 'X-CSRF-Token': getCsrfToken() },
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || 'Upload failed');

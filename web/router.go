@@ -22,7 +22,7 @@ func NewRouter(cfg *config.Config) *gin.Engine {
 	r.GET("/", LoginPage)
 
 	// Auth API
-	r.POST("/api/login", Login(cfg))
+	r.POST("/api/login", LoginRateLimit(), Login(cfg))
 	r.POST("/api/logout", Logout)
 
 	// Protected pages
@@ -36,7 +36,7 @@ func NewRouter(cfg *config.Config) *gin.Engine {
 
 	// Protected API
 	api := r.Group("/api")
-	api.Use(APIAuth())
+	api.Use(APIAuth(), CSRFProtection())
 	{
 		api.POST("/change-password", ChangePassword)
 

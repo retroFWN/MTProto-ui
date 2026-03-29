@@ -1,7 +1,12 @@
 // ── API helper ──
+function getCsrfToken() {
+    const m = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
+    return m ? m[1] : '';
+}
+
 async function api(url, options = {}) {
     const defaults = {
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
         credentials: 'same-origin',
     };
     const res = await fetch(url, { ...defaults, ...options });
@@ -20,6 +25,12 @@ function toast(msg, type = 'success') {
     el.textContent = msg;
     el.className = `toast toast-${type} show`;
     setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ── Security ──
+function esc(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 // ── Formatters ──

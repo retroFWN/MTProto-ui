@@ -126,7 +126,7 @@
                 const badge = p.status.running
                     ? `<span class="badge badge-success">${t('status_running')}</span>`
                     : `<span class="badge badge-danger">${t('status_stopped')}</span>`;
-                html += `<tr><td class="font-medium">${p.name}</td><td>${p.port}</td><td>${badge}</td><td>${p.client_count}</td><td>${formatBytes(p.traffic_up + p.traffic_down)}</td></tr>`;
+                html += `<tr><td class="font-medium">${esc(p.name)}</td><td>${p.port}</td><td>${badge}</td><td>${p.client_count}</td><td>${formatBytes(p.traffic_up + p.traffic_down)}</td></tr>`;
             }
             html += '</tbody></table>';
             el.innerHTML = html;
