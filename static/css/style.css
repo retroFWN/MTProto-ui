@@ -123,6 +123,9 @@ tr:hover { background: rgba(59,130,246,.05); }
 code { font-size: 12px; cursor: pointer; background: var(--bg-primary); padding: 2px 6px; border-radius: 4px; }
 pre { background: var(--bg-primary); padding: 12px; border-radius: 8px; max-height: 400px; overflow: auto; font-size: 12px; white-space: pre-wrap; }
 
+/* Collapsible sections */
+.section-divider .fa-chevron-right, .section-divider .fa-chevron-down { transition: transform .2s; }
+
 /* Client cards */
 .client-card { background: var(--bg-primary); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
 .client-card + .client-card { margin-top: 10px; }

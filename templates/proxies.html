@@ -94,8 +94,17 @@
             <h3 data-i18n="modal_add_client"></h3>
             <input type="hidden" id="clientProxyId">
             <div class="mb-3"><label data-i18n="label_client_name"></label><input type="text" id="clientName" data-i18n-placeholder="placeholder_client_name"></div>
-            <div class="mb-3"><label data-i18n="label_traffic_limit"></label><input type="number" id="clientTrafficLimit" value="0"></div>
-            <div class="mb-4"><label data-i18n="label_expiry"></label><input type="number" id="clientExpiry" value="0"></div>
+            <div class="mb-3"><label data-i18n="label_traffic_limit_gb"></label><input type="number" id="clientTrafficLimit" value="0" step="0.1" min="0"></div>
+            <div class="mb-4">
+                <label data-i18n="label_expiry_days"></label>
+                <input type="number" id="clientExpiry" value="0" min="0">
+                <div class="flex gap-2 mt-2">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('clientExpiry').value=7">7д</button>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('clientExpiry').value=30">30д</button>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('clientExpiry').value=90">90д</button>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('clientExpiry').value=365">365д</button>
+                </div>
+            </div>
             <div class="flex gap-2" style="justify-content:flex-end">
                 <button class="btn btn-outline" onclick="hideModal('addClientModal')"><span data-i18n="btn_cancel"></span></button>
                 <button class="btn btn-primary" onclick="addClient()"><span data-i18n="btn_add"></span></button>
@@ -140,6 +149,21 @@
     let proxyData = {};
     let clientCache = {};
     let initialized = false;
+    let openSections = new Set();
+
+    function toggleClients(proxyId) {
+        const el = document.getElementById(`clients-wrap-${proxyId}`);
+        const icon = document.getElementById(`chevron-${proxyId}`);
+        if (openSections.has(proxyId)) {
+            openSections.delete(proxyId);
+            el.style.display = 'none';
+            icon.className = 'fas fa-chevron-right';
+        } else {
+            openSections.add(proxyId);
+            el.style.display = 'block';
+            icon.className = 'fas fa-chevron-down';
+        }
+    }
 
     function onLangChange() { applyI18n(); refresh(); }
 
@@ -227,11 +251,13 @@
                     </div>
                     ${liveSummaryHtml ? `<div class="grid grid-3 section-divider">${liveSummaryHtml}</div>` : ''}
                     <div class="section-divider">
-                        <div class="flex items-center justify-between mb-3">
-                            <h4 class="font-bold">${t('clients_count', {count: p.client_count})}</h4>
-                            <button class="btn btn-outline btn-sm" onclick="showAddClientModal(${p.id})"><i class="fas fa-plus mr-1"></i>${t('btn_add_client')}</button>
+                        <div class="flex items-center justify-between" style="cursor:pointer" onclick="toggleClients(${p.id})">
+                            <h4 class="font-bold"><i class="fas fa-chevron-${openSections.has(p.id)?'down':'right'}" id="chevron-${p.id}" style="width:14px;margin-right:6px;font-size:12px"></i>${t('clients_count', {count: p.client_count})}</h4>
+                            <button class="btn btn-outline btn-sm" onclick="showAddClientModal(${p.id}); event.stopPropagation()"><i class="fas fa-plus mr-1"></i>${t('btn_add_client')}</button>
                         </div>
-                        <div id="clients-${p.id}">${clientCache[p.id] || (initialized ? '' : `<p class="text-sm" style="color:var(--text-secondary)">${t('loading')}</p>`)}</div>
+                        <div id="clients-wrap-${p.id}" style="display:${openSections.has(p.id)?'block':'none'}; margin-top:12px">
+                            <div id="clients-${p.id}">${clientCache[p.id] || (initialized ? '' : `<p class="text-sm" style="color:var(--text-secondary)">${t('loading')}</p>`)}</div>
+                        </div>
                     </div>
                 </div>`;
             }
@@ -458,11 +484,15 @@
 
     async function addClient() {
         const proxyId = document.getElementById('clientProxyId').value;
+        const trafficGb = parseFloat(document.getElementById('clientTrafficLimit').value) || 0;
+        const expiryDays = parseInt(document.getElementById('clientExpiry').value) || 0;
+        const trafficBytes = trafficGb > 0 ? Math.round(trafficGb * 1024 * 1024 * 1024) : 0;
+        const expiryUnix = expiryDays > 0 ? Math.floor(Date.now() / 1000) + expiryDays * 86400 : 0;
         try {
             await api(`/api/proxies/${proxyId}/clients`, { method: 'POST', body: JSON.stringify({
                 name: document.getElementById('clientName').value,
-                traffic_limit: parseInt(document.getElementById('clientTrafficLimit').value),
-                expiry_time: parseInt(document.getElementById('clientExpiry').value),
+                traffic_limit: trafficBytes,
+                expiry_time: expiryUnix,
             })});
             hideModal('addClientModal'); toast(t('toast_client_added')); loadProxies();
         } catch (e) { toast(e.message, 'error'); }
