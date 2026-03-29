@@ -65,6 +65,10 @@ func NewRouter(cfg *config.Config) *gin.Engine {
 
 		api.GET("/backends", ListBackends)
 
+		api.POST("/upload-cert", UploadCert(cfg))
+		api.DELETE("/custom-cert", DeleteCert(cfg))
+		api.GET("/cert-info", CertInfo(cfg))
+
 		api.GET("/bot/status", BotStatus)
 		api.POST("/bot/start", BotStart(cfg))
 		api.POST("/bot/stop", BotStop)

@@ -74,7 +74,49 @@ func main() {
 	}
 	cfg.Domain = domain
 
-	if domain != "" {
+	// Check for custom SSL certificate
+	customCert := filepath.Join(cfg.DataDir, "custom-certs", "cert.pem")
+	customKey := filepath.Join(cfg.DataDir, "custom-certs", "key.pem")
+	_, certErr := os.Stat(customCert)
+	hasCustomCert := certErr == nil
+
+	if hasCustomCert {
+		// Custom SSL certificate
+		// HTTP :80 — redirect to HTTPS
+		go func() {
+			log.Printf("HTTP :80 → HTTPS redirect")
+			redirect := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				target := "https://" + r.Host + r.URL.RequestURI()
+				http.Redirect(w, r, target, http.StatusMovedPermanently)
+			})
+			if err := http.ListenAndServe(":80", redirect); err != nil {
+				log.Printf("HTTP listener error: %v", err)
+			}
+		}()
+
+		// Internal HTTP API for bot/internal access
+		go func() {
+			addr := fmt.Sprintf("127.0.0.1:%d", cfg.Port)
+			log.Printf("Internal API on http://%s", addr)
+			if err := http.ListenAndServe(addr, router.Handler()); err != nil {
+				log.Printf("Internal HTTP listener error: %v", err)
+			}
+		}()
+
+		log.Printf("MTProxy Panel starting on https://:443 (custom certificate)")
+		log.Printf("Default credentials: %s / %s", cfg.DefaultUser, cfg.DefaultPass)
+
+		server := &http.Server{
+			Addr:    ":443",
+			Handler: router.Handler(),
+			TLSConfig: &tls.Config{
+				MinVersion: tls.VersionTLS12,
+			},
+		}
+		if err := server.ListenAndServeTLS(customCert, customKey); err != nil {
+			log.Fatalf("HTTPS server failed: %v", err)
+		}
+	} else if domain != "" {
 		// Auto-SSL via Let's Encrypt
 		certDir := filepath.Join(cfg.DataDir, "certs")
 		manager := &autocert.Manager{

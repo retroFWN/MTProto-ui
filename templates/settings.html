@@ -87,11 +87,43 @@
         <!-- SSL / Domain -->
         <div class="card mb-6">
             <h3 class="font-bold text-lg mb-4"><i class="fas fa-shield-alt mr-2"></i><span data-i18n="settings_ssl_title"></span></h3>
+
+            <!-- Option 1: Let's Encrypt -->
+            <p class="font-medium mb-2" data-i18n="ssl_option_letsencrypt"></p>
             <p class="mb-3" style="color:var(--text-secondary);font-size:13px" data-i18n-html="settings_ssl_desc"></p>
             <div class="grid grid-2">
                 <div><label data-i18n="label_panel_domain"></label><input type="text" id="setting-panel_domain" data-i18n-placeholder="placeholder_panel_domain"></div>
             </div>
             <button class="btn btn-primary mt-4" onclick="saveSettings()"><i class="fas fa-save mr-1"></i> <span data-i18n="btn_save_restart"></span></button>
+
+            <!-- Divider -->
+            <div class="section-divider mt-4">
+                <!-- Option 2: Custom certificate -->
+                <p class="font-medium mb-2" data-i18n="ssl_option_custom"></p>
+                <p class="mb-3" style="color:var(--text-secondary);font-size:13px" data-i18n="ssl_custom_desc"></p>
+
+                <div id="certInfo" style="display:none" class="mb-3">
+                    <div style="background:var(--bg-primary);border-radius:8px;padding:12px;font-size:13px">
+                        <div id="certDetails"></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-2 mb-3">
+                    <div>
+                        <label data-i18n="label_cert_file"></label>
+                        <input type="file" id="certFile" accept=".pem,.crt,.cer" style="padding:6px">
+                    </div>
+                    <div>
+                        <label data-i18n="label_key_file"></label>
+                        <input type="file" id="keyFile" accept=".pem,.key" style="padding:6px">
+                    </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px">
+                    <button class="btn btn-primary" onclick="uploadCert()"><i class="fas fa-upload mr-1"></i> <span data-i18n="btn_upload_cert"></span></button>
+                    <button class="btn btn-danger" id="deleteCertBtn" style="display:none" onclick="deleteCert()"><i class="fas fa-trash mr-1"></i> <span data-i18n="btn_delete_cert"></span></button>
+                    <span id="certStatus" style="color:var(--text-secondary);font-size:13px"></span>
+                </div>
+            </div>
         </div>
 
         <!-- Panel Settings -->
@@ -267,9 +299,69 @@
         }
     }
 
+    async function loadCertInfo() {
+        try {
+            const info = await api('/api/cert-info');
+            const el = document.getElementById('certInfo');
+            const details = document.getElementById('certDetails');
+            const delBtn = document.getElementById('deleteCertBtn');
+            if (info.installed) {
+                el.style.display = 'block';
+                delBtn.style.display = '';
+                if (info.error) {
+                    details.innerHTML = `<span style="color:var(--danger)">⚠ ${info.error}</span>`;
+                } else {
+                    const expired = info.expired ? ' <span style="color:var(--danger)">(expired!)</span>' : '';
+                    details.innerHTML = `
+                        ✅ <b>${t('ssl_cert_installed')}</b><br>
+                        ${t('ssl_cert_domains')}: <b>${(info.domains||[]).join(', ')}</b><br>
+                        ${t('ssl_cert_issuer')}: ${info.issuer}<br>
+                        ${t('ssl_cert_valid')}: ${info.not_before} — ${info.not_after}${expired}`;
+                }
+            } else {
+                el.style.display = 'none';
+                delBtn.style.display = 'none';
+            }
+        } catch (e) { console.error(e); }
+    }
+
+    async function uploadCert() {
+        const certInput = document.getElementById('certFile');
+        const keyInput = document.getElementById('keyFile');
+        if (!certInput.files.length || !keyInput.files.length) {
+            toast(t('ssl_select_files'), 'error'); return;
+        }
+        const form = new FormData();
+        form.append('cert', certInput.files[0]);
+        form.append('key', keyInput.files[0]);
+        const status = document.getElementById('certStatus');
+        try {
+            const res = await fetch('/api/upload-cert', {
+                method: 'POST', body: form,
+                credentials: 'include',
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Upload failed');
+            toast(t('ssl_cert_uploaded'));
+            status.textContent = t('ssl_restart_needed');
+            status.style.color = 'var(--warning)';
+            loadCertInfo();
+        } catch (e) { toast(e.message, 'error'); }
+    }
+
+    async function deleteCert() {
+        if (!confirm(t('ssl_confirm_delete'))) return;
+        try {
+            await api('/api/custom-cert', { method: 'DELETE' });
+            toast(t('ssl_cert_deleted'));
+            loadCertInfo();
+        } catch (e) { toast(e.message, 'error'); }
+    }
+
     loadBackends();
     loadSettings();
     loadBotStatus();
+    loadCertInfo();
     </script>
 </body>
 </html>

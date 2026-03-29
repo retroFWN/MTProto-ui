@@ -25,22 +25,15 @@ def format_bytes(b: int) -> str:
     return f"{b:.1f} PB"
 
 
-# ── Client List ───────────────────────────────────────────────────────────
+# ── Helpers (reusable render functions) ───────────────────────────────────
 
 
-@router.callback_query(F.data.startswith("clients:"))
-async def cb_client_list(cq: types.CallbackQuery) -> None:
-    if not is_admin(cq.from_user.id):
-        await cq.answer("⛔", show_alert=True)
-        return
-    await cq.answer()
-
-    proxy_id = int(cq.data.split(":")[1])
-
+async def show_client_list(message: types.Message, proxy_id: int) -> None:
+    """Render client list into the given message."""
     try:
         clients = await panel.list_clients(proxy_id)
     except Exception as e:
-        await cq.message.edit_text(f"❌ Ошибка: {e}")
+        await message.edit_text(f"❌ Ошибка: {e}")
         return
 
     if not clients:
@@ -48,7 +41,7 @@ async def cb_client_list(cq: types.CallbackQuery) -> None:
             [InlineKeyboardButton(text="➕ Добавить клиента", callback_data=f"cl_add:{proxy_id}")],
             [InlineKeyboardButton(text="🔙 К прокси", callback_data=f"px:{proxy_id}")],
         ])
-        await cq.message.edit_text("👥 Нет клиентов.", reply_markup=kb)
+        await message.edit_text("👥 Нет клиентов.", reply_markup=kb)
         return
 
     text = "👥 <b>Клиенты</b>\n"
@@ -71,32 +64,20 @@ async def cb_client_list(cq: types.CallbackQuery) -> None:
     buttons.append([InlineKeyboardButton(text="➕ Добавить", callback_data=f"cl_add:{proxy_id}")])
     buttons.append([InlineKeyboardButton(text="🔙 К прокси", callback_data=f"px:{proxy_id}")])
 
-    await cq.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+    await message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
 
 
-# ── Client Detail ─────────────────────────────────────────────────────────
-
-
-@router.callback_query(F.data.regexp(r"^cl:\d+:\d+$"))
-async def cb_client_detail(cq: types.CallbackQuery) -> None:
-    if not is_admin(cq.from_user.id):
-        await cq.answer("⛔", show_alert=True)
-        return
-    await cq.answer()
-
-    parts = cq.data.split(":")
-    proxy_id = int(parts[1])
-    client_id = int(parts[2])
-
+async def show_client_detail(message: types.Message, proxy_id: int, client_id: int) -> None:
+    """Render client detail into the given message."""
     try:
         clients = await panel.list_clients(proxy_id)
     except Exception as e:
-        await cq.message.edit_text(f"❌ Ошибка: {e}")
+        await message.edit_text(f"❌ Ошибка: {e}")
         return
 
     c = next((x for x in clients if x.get("id") == client_id), None)
     if not c:
-        await cq.answer("Клиент не найден", show_alert=True)
+        await message.edit_text("Клиент не найден.")
         return
 
     enabled = c.get("enabled", True)
@@ -151,7 +132,30 @@ async def cb_client_detail(cq: types.CallbackQuery) -> None:
         [InlineKeyboardButton(text="🔙 К клиентам", callback_data=f"clients:{proxy_id}")],
     ])
 
-    await cq.message.edit_text(text, reply_markup=kb)
+    await message.edit_text(text, reply_markup=kb)
+
+
+# ── Callback Handlers ─────────────────────────────────────────────────────
+
+
+@router.callback_query(F.data.startswith("clients:"))
+async def cb_client_list(cq: types.CallbackQuery) -> None:
+    if not is_admin(cq.from_user.id):
+        await cq.answer("⛔", show_alert=True)
+        return
+    await cq.answer()
+    proxy_id = int(cq.data.split(":")[1])
+    await show_client_list(cq.message, proxy_id)
+
+
+@router.callback_query(F.data.regexp(r"^cl:\d+:\d+$"))
+async def cb_client_detail(cq: types.CallbackQuery) -> None:
+    if not is_admin(cq.from_user.id):
+        await cq.answer("⛔", show_alert=True)
+        return
+    await cq.answer()
+    parts = cq.data.split(":")
+    await show_client_detail(cq.message, int(parts[1]), int(parts[2]))
 
 
 # ── Client Actions ────────────────────────────────────────────────────────
@@ -166,7 +170,6 @@ async def cb_client_toggle(cq: types.CallbackQuery) -> None:
     parts = cq.data.split(":")
     proxy_id, client_id = int(parts[1]), int(parts[2])
 
-    # Get current state to determine toggle direction
     try:
         clients = await panel.list_clients(proxy_id)
         c = next((x for x in clients if x.get("id") == client_id), None)
@@ -180,9 +183,7 @@ async def cb_client_toggle(cq: types.CallbackQuery) -> None:
         await cq.answer(f"❌ {e}", show_alert=True)
         return
 
-    # Refresh detail
-    cq.data = f"cl:{proxy_id}:{client_id}"
-    await cb_client_detail(cq)
+    await show_client_detail(cq.message, proxy_id, client_id)
 
 
 @router.callback_query(F.data.startswith("cl_reset:"))
@@ -201,8 +202,7 @@ async def cb_client_reset(cq: types.CallbackQuery) -> None:
         await cq.answer(f"❌ {e}", show_alert=True)
         return
 
-    cq.data = f"cl:{proxy_id}:{client_id}"
-    await cb_client_detail(cq)
+    await show_client_detail(cq.message, proxy_id, client_id)
 
 
 @router.callback_query(F.data.startswith("cl_del:"))
@@ -240,9 +240,7 @@ async def cb_client_delete(cq: types.CallbackQuery) -> None:
         await cq.answer(f"❌ {e}", show_alert=True)
         return
 
-    # Go back to client list
-    cq.data = f"clients:{proxy_id}"
-    await cb_client_list(cq)
+    await show_client_list(cq.message, proxy_id)
 
 
 # ── Add Client (FSM) ─────────────────────────────────────────────────────
@@ -288,7 +286,6 @@ async def fsm_name(msg: types.Message, state: FSMContext) -> None:
     await state.update_data(name=name)
     await state.set_state(AddClient.traffic_limit)
 
-    # Delete user message to keep chat clean
     try:
         await msg.delete()
     except Exception:
@@ -301,7 +298,6 @@ async def fsm_name(msg: types.Message, state: FSMContext) -> None:
         [InlineKeyboardButton(text="❌ Отмена", callback_data=f"px:{proxy_id}")],
     ])
 
-    # Edit the original bot message
     try:
         await msg.bot.edit_message_text(
             f"➕ <b>Новый клиент:</b> {name}\n\n"
@@ -313,7 +309,7 @@ async def fsm_name(msg: types.Message, state: FSMContext) -> None:
         )
     except Exception:
         await msg.answer(
-            f"Шаг 2/3 — Лимит трафика (GB, 0 = безлимит):",
+            "Шаг 2/3 — Лимит трафика (GB, 0 = безлимит):",
             reply_markup=kb,
         )
 
@@ -391,7 +387,9 @@ async def fsm_traffic(msg: types.Message, state: FSMContext) -> None:
 async def fsm_expiry_btn(cq: types.CallbackQuery, state: FSMContext) -> None:
     await cq.answer()
     value = int(cq.data.split(":")[1])
-    await _create_client(cq.message, state, value, cq.from_user.id)
+    data = await state.get_data()
+    await state.clear()
+    await _create_client(cq.message, data, value)
 
 
 @router.message(AddClient.expiry_days)
@@ -410,15 +408,17 @@ async def fsm_expiry(msg: types.Message, state: FSMContext) -> None:
     except Exception:
         pass
 
-    await _create_client(msg, state, value, msg.from_user.id, edit_msg_id=(await state.get_data()).get("msg_id"))
+    data = await state.get_data()
+    await state.clear()
+    await _create_client(msg, data, value, edit_msg_id=data.get("msg_id"))
 
 
 async def _create_client(
-    msg_or_target, state: FSMContext, expiry_days: int, user_id: int, edit_msg_id: int | None = None,
+    msg_or_target: types.Message,
+    data: dict,
+    expiry_days: int,
+    edit_msg_id: int | None = None,
 ) -> None:
-    data = await state.get_data()
-    await state.clear()
-
     proxy_id = data["proxy_id"]
     name = data["name"]
     traffic_gb = data.get("traffic_limit", 0)
@@ -431,13 +431,19 @@ async def _create_client(
             [InlineKeyboardButton(text="🔙 К прокси", callback_data=f"px:{proxy_id}")],
         ])
         text = f"❌ Ошибка: {e}"
-        if isinstance(msg_or_target, types.Message) and edit_msg_id:
+        if edit_msg_id:
             try:
-                await msg_or_target.bot.edit_message_text(text, chat_id=msg_or_target.chat.id, message_id=edit_msg_id, reply_markup=kb)
+                await msg_or_target.bot.edit_message_text(
+                    text, chat_id=msg_or_target.chat.id,
+                    message_id=edit_msg_id, reply_markup=kb,
+                )
+                return
             except Exception:
-                await msg_or_target.answer(text, reply_markup=kb)
-        elif isinstance(msg_or_target, types.Message):
+                pass
+        try:
             await msg_or_target.edit_text(text, reply_markup=kb)
+        except Exception:
+            await msg_or_target.answer(text, reply_markup=kb)
         return
 
     secret = result.get("secret", "—")
@@ -460,15 +466,17 @@ async def _create_client(
         [InlineKeyboardButton(text="👥 Все клиенты", callback_data=f"clients:{proxy_id}")],
     ])
 
-    if isinstance(msg_or_target, types.Message) and edit_msg_id:
+    if edit_msg_id:
         try:
-            await msg_or_target.bot.edit_message_text(text, chat_id=msg_or_target.chat.id, message_id=edit_msg_id, reply_markup=kb)
+            await msg_or_target.bot.edit_message_text(
+                text, chat_id=msg_or_target.chat.id,
+                message_id=edit_msg_id, reply_markup=kb,
+            )
             return
         except Exception:
             pass
 
-    if isinstance(msg_or_target, types.Message):
-        try:
-            await msg_or_target.edit_text(text, reply_markup=kb)
-        except Exception:
-            await msg_or_target.answer(text, reply_markup=kb)
+    try:
+        await msg_or_target.edit_text(text, reply_markup=kb)
+    except Exception:
+        await msg_or_target.answer(text, reply_markup=kb)

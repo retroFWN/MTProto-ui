@@ -21,27 +21,22 @@ def format_bytes(b: int) -> str:
     return f"{b:.1f} PB"
 
 
-# ── Proxy List ────────────────────────────────────────────────────────────
+# ── Helpers (reusable render functions) ───────────────────────────────────
 
 
-@router.callback_query(F.data == "proxies")
-async def cb_proxy_list(cq: types.CallbackQuery) -> None:
-    if not is_admin(cq.from_user.id):
-        await cq.answer("⛔ Нет доступа", show_alert=True)
-        return
-    await cq.answer()
-
+async def show_proxy_list(message: types.Message) -> None:
+    """Render proxy list into the given message."""
     try:
         proxies = await panel.list_proxies()
     except Exception as e:
-        await cq.message.edit_text(f"❌ Ошибка: {e}")
+        await message.edit_text(f"❌ Ошибка: {e}")
         return
 
     if not proxies:
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🔙 Меню", callback_data="menu")],
         ])
-        await cq.message.edit_text("📡 Нет прокси-серверов.", reply_markup=kb)
+        await message.edit_text("📡 Нет прокси-серверов.", reply_markup=kb)
         return
 
     text = "📡 <b>Прокси-серверы</b>\n"
@@ -65,30 +60,20 @@ async def cb_proxy_list(cq: types.CallbackQuery) -> None:
         )])
 
     buttons.append([InlineKeyboardButton(text="🔙 Меню", callback_data="menu")])
-    await cq.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+    await message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
 
 
-# ── Proxy Detail ──────────────────────────────────────────────────────────
-
-
-@router.callback_query(F.data.startswith("px:"))
-async def cb_proxy_detail(cq: types.CallbackQuery) -> None:
-    if not is_admin(cq.from_user.id):
-        await cq.answer("⛔ Нет доступа", show_alert=True)
-        return
-    await cq.answer()
-
-    proxy_id = int(cq.data.split(":")[1])
-
+async def show_proxy_detail(message: types.Message, proxy_id: int) -> None:
+    """Render proxy detail into the given message."""
     try:
         proxies = await panel.list_proxies()
     except Exception as e:
-        await cq.message.edit_text(f"❌ Ошибка: {e}")
+        await message.edit_text(f"❌ Ошибка: {e}")
         return
 
     p = next((x for x in proxies if x.get("id") == proxy_id), None)
     if not p:
-        await cq.message.edit_text("Прокси не найден.")
+        await message.edit_text("Прокси не найден.")
         return
 
     running = p.get("status", {}).get("running", False)
@@ -128,10 +113,29 @@ async def cb_proxy_detail(cq: types.CallbackQuery) -> None:
     row3 = [InlineKeyboardButton(text="🔙 К списку", callback_data="proxies")]
 
     kb = InlineKeyboardMarkup(inline_keyboard=[row1, row2, row3])
-    await cq.message.edit_text(text, reply_markup=kb)
+    await message.edit_text(text, reply_markup=kb)
 
 
-# ── Proxy Actions ─────────────────────────────────────────────────────────
+# ── Callback Handlers ─────────────────────────────────────────────────────
+
+
+@router.callback_query(F.data == "proxies")
+async def cb_proxy_list(cq: types.CallbackQuery) -> None:
+    if not is_admin(cq.from_user.id):
+        await cq.answer("⛔ Нет доступа", show_alert=True)
+        return
+    await cq.answer()
+    await show_proxy_list(cq.message)
+
+
+@router.callback_query(F.data.startswith("px:"))
+async def cb_proxy_detail(cq: types.CallbackQuery) -> None:
+    if not is_admin(cq.from_user.id):
+        await cq.answer("⛔ Нет доступа", show_alert=True)
+        return
+    await cq.answer()
+    proxy_id = int(cq.data.split(":")[1])
+    await show_proxy_detail(cq.message, proxy_id)
 
 
 @router.callback_query(F.data.startswith("px_start:"))
@@ -146,9 +150,7 @@ async def cb_proxy_start(cq: types.CallbackQuery) -> None:
     except Exception as e:
         await cq.answer(f"❌ {e}", show_alert=True)
         return
-    # Refresh proxy detail
-    cq.data = f"px:{proxy_id}"
-    await cb_proxy_detail(cq)
+    await show_proxy_detail(cq.message, proxy_id)
 
 
 @router.callback_query(F.data.startswith("px_stop:"))
@@ -163,8 +165,7 @@ async def cb_proxy_stop(cq: types.CallbackQuery) -> None:
     except Exception as e:
         await cq.answer(f"❌ {e}", show_alert=True)
         return
-    cq.data = f"px:{proxy_id}"
-    await cb_proxy_detail(cq)
+    await show_proxy_detail(cq.message, proxy_id)
 
 
 @router.callback_query(F.data.startswith("px_restart:"))
@@ -179,5 +180,4 @@ async def cb_proxy_restart(cq: types.CallbackQuery) -> None:
     except Exception as e:
         await cq.answer(f"❌ {e}", show_alert=True)
         return
-    cq.data = f"px:{proxy_id}"
-    await cb_proxy_detail(cq)
+    await show_proxy_detail(cq.message, proxy_id)

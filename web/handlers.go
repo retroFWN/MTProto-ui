@@ -1,8 +1,12 @@
 package web
 
 import (
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"net/http"
+	"os"
 	"sync"
 	"path/filepath"
 	"runtime"
@@ -904,6 +908,95 @@ func BotStop(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// ── SSL Certificates ────────────────────────────────────────────────────
+
+func UploadCert(cfg *config.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		certFile, err := c.FormFile("cert")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"detail": "Missing cert file"})
+			return
+		}
+		keyFile, err := c.FormFile("key")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"detail": "Missing key file"})
+			return
+		}
+
+		certDir := filepath.Join(cfg.DataDir, "custom-certs")
+		os.MkdirAll(certDir, 0700)
+		certPath := filepath.Join(certDir, "cert.pem")
+		keyPath := filepath.Join(certDir, "key.pem")
+
+		if err := c.SaveUploadedFile(certFile, certPath); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"detail": "Failed to save cert"})
+			return
+		}
+		if err := c.SaveUploadedFile(keyFile, keyPath); err != nil {
+			os.Remove(certPath)
+			c.JSON(http.StatusInternalServerError, gin.H{"detail": "Failed to save key"})
+			return
+		}
+
+		// Validate cert+key pair
+		_, err = tls.LoadX509KeyPair(certPath, keyPath)
+		if err != nil {
+			os.Remove(certPath)
+			os.Remove(keyPath)
+			c.JSON(http.StatusBadRequest, gin.H{"detail": "Invalid certificate/key pair: " + err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"success": true, "message": "Certificate uploaded. Restart required."})
+	}
+}
+
+func DeleteCert(cfg *config.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		certDir := filepath.Join(cfg.DataDir, "custom-certs")
+		os.Remove(filepath.Join(certDir, "cert.pem"))
+		os.Remove(filepath.Join(certDir, "key.pem"))
+		c.JSON(http.StatusOK, gin.H{"success": true, "message": "Certificate removed. Restart required."})
+	}
+}
+
+func CertInfo(cfg *config.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		certPath := filepath.Join(cfg.DataDir, "custom-certs", "cert.pem")
+		certPEM, err := os.ReadFile(certPath)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{"installed": false})
+			return
+		}
+
+		block, _ := pem.Decode(certPEM)
+		if block == nil {
+			c.JSON(http.StatusOK, gin.H{"installed": true, "error": "Failed to parse PEM"})
+			return
+		}
+
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{"installed": true, "error": err.Error()})
+			return
+		}
+
+		domains := cert.DNSNames
+		if len(domains) == 0 && cert.Subject.CommonName != "" {
+			domains = []string{cert.Subject.CommonName}
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"installed":  true,
+			"domains":    domains,
+			"issuer":     cert.Issuer.CommonName,
+			"not_before": cert.NotBefore.Format("2006-01-02"),
+			"not_after":  cert.NotAfter.Format("2006-01-02"),
+			"expired":    time.Now().After(cert.NotAfter),
+		})
+	}
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────
