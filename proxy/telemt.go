@@ -79,8 +79,8 @@ func generateConfigTOML(port int, clients []ClientEntry, domain string, adTag st
 
 	sb.WriteString("[server.api]\n")
 	sb.WriteString("enabled = true\n")
-	sb.WriteString(fmt.Sprintf("listen = \"127.0.0.1:%d\"\n", port+10000))
-	sb.WriteString("whitelist = [\"127.0.0.0/8\", \"172.16.0.0/12\", \"10.0.0.0/8\", \"::1/128\"]\n\n")
+	sb.WriteString(fmt.Sprintf("listen = \"0.0.0.0:%d\"\n", port+10000))
+	sb.WriteString("whitelist = [\"127.0.0.0/8\", \"172.16.0.0/12\", \"10.0.0.0/8\", \"192.168.0.0/16\", \"::1/128\"]\n\n")
 
 	sb.WriteString("[[server.listeners]]\n")
 	sb.WriteString("ip = \"0.0.0.0\"\n\n")
