@@ -11,7 +11,7 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o mtproxy-panel .
 # ── Runtime ──
 FROM alpine:3.20
 
-RUN apk add --no-cache docker-cli ca-certificates python3 py3-pip
+RUN apk add --no-cache docker-cli docker-cli-buildx ca-certificates git python3 py3-pip
 
 WORKDIR /app
 
