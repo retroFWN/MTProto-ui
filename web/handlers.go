@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"sync"
@@ -262,12 +263,18 @@ func CreateProxy(c *gin.Context) {
 	}
 	database.DB.Create(&client)
 
-	dbClients := database.GetEnabledClients(p.ID)
-	entries := proxy.ClientEntriesFromDB(dbClients)
-	containerID, err := proxy.StartProxy(p.ID, p.Port, entries, p.FakeTLSDomain, p.Backend, p.AdTag)
-	if err == nil {
-		database.DB.Model(&p).Update("container_id", containerID)
-	}
+	// Start proxy container in background to avoid blocking the HTTP response
+	go func(proxyID uint, port int, domain, backend, adTag string) {
+		dbClients := database.GetEnabledClients(proxyID)
+		entries := proxy.ClientEntriesFromDB(dbClients)
+		containerID, err := proxy.StartProxy(proxyID, port, entries, domain, backend, adTag)
+		if err != nil {
+			log.Printf("Failed to start proxy %d: %v", proxyID, err)
+			database.DB.Model(&database.Proxy{}).Where("id = ?", proxyID).Update("enabled", false)
+			return
+		}
+		database.DB.Model(&database.Proxy{}).Where("id = ?", proxyID).Update("container_id", containerID)
+	}(p.ID, p.Port, p.FakeTLSDomain, p.Backend, p.AdTag)
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "id": p.ID, "secret": secret})
 }
@@ -301,6 +308,12 @@ func UpdateProxy(c *gin.Context) {
 		p.Name = *req.Name
 	}
 	if req.Port != nil && *req.Port != p.Port {
+		var count int64
+		database.DB.Model(&database.Proxy{}).Where("port = ? AND id != ?", *req.Port, p.ID).Count(&count)
+		if count > 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"detail": fmt.Sprintf("Port %d already in use", *req.Port)})
+			return
+		}
 		p.Port = *req.Port
 		needRestart = true
 	}
@@ -323,15 +336,23 @@ func UpdateProxy(c *gin.Context) {
 
 	if needRestart {
 		if p.Enabled {
-			dbClients := database.GetEnabledClients(p.ID)
-			entries := proxy.ClientEntriesFromDB(dbClients)
-			if len(entries) > 0 {
-				cid, _ := proxy.RestartProxy(p.ID, p.Port, entries, p.FakeTLSDomain, p.Backend, p.AdTag)
-				database.DB.Model(&p).Update("container_id", cid)
-			}
+			go func(proxyID uint, port int, domain, backend, adTag string) {
+				dbClients := database.GetEnabledClients(proxyID)
+				entries := proxy.ClientEntriesFromDB(dbClients)
+				if len(entries) > 0 {
+					cid, err := proxy.RestartProxy(proxyID, port, entries, domain, backend, adTag)
+					if err != nil {
+						log.Printf("Failed to restart proxy %d: %v", proxyID, err)
+						return
+					}
+					database.DB.Model(&database.Proxy{}).Where("id = ?", proxyID).Update("container_id", cid)
+				}
+			}(p.ID, p.Port, p.FakeTLSDomain, p.Backend, p.AdTag)
 		} else {
-			proxy.StopProxy(p.ID)
-			database.DB.Model(&p).Update("container_id", "")
+			go func(proxyID uint) {
+				proxy.StopProxy(proxyID)
+				database.DB.Model(&database.Proxy{}).Where("id = ?", proxyID).Updates(map[string]interface{}{"container_id": ""})
+			}(p.ID)
 		}
 	}
 
@@ -372,13 +393,19 @@ func StartProxyHandler(c *gin.Context) {
 		return
 	}
 
-	cid, err := proxy.StartProxy(p.ID, p.Port, entries, p.FakeTLSDomain, p.Backend, p.AdTag)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"detail": err.Error()})
-		return
-	}
-	database.DB.Model(&p).Updates(map[string]interface{}{"container_id": cid, "enabled": true})
-	c.JSON(http.StatusOK, gin.H{"success": true, "container_id": cid})
+	database.DB.Model(&p).Update("enabled", true)
+
+	go func(proxyID uint, port int, entries []proxy.ClientEntry, domain, backend, adTag string) {
+		cid, err := proxy.StartProxy(proxyID, port, entries, domain, backend, adTag)
+		if err != nil {
+			log.Printf("Failed to start proxy %d: %v", proxyID, err)
+			database.DB.Model(&database.Proxy{}).Where("id = ?", proxyID).Update("enabled", false)
+			return
+		}
+		database.DB.Model(&database.Proxy{}).Where("id = ?", proxyID).Update("container_id", cid)
+	}(p.ID, p.Port, entries, p.FakeTLSDomain, p.Backend, p.AdTag)
+
+	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
 func StopProxyHandler(c *gin.Context) {
@@ -415,12 +442,18 @@ func RestartProxyHandler(c *gin.Context) {
 		return
 	}
 
-	cid, err := proxy.RestartProxy(p.ID, p.Port, entries, p.FakeTLSDomain, p.Backend, p.AdTag)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"detail": err.Error()})
-		return
-	}
-	database.DB.Model(&p).Update("container_id", cid)
+	go func(proxyID uint, port int, entries []proxy.ClientEntry, domain, backend, adTag string) {
+		cid, err := proxy.RestartProxy(proxyID, port, entries, domain, backend, adTag)
+		if err != nil {
+			log.Printf("Failed to restart proxy %d: %v", proxyID, err)
+			database.DB.Model(&database.Proxy{}).Where("id = ?", proxyID).Updates(map[string]interface{}{
+				"enabled": false, "container_id": "",
+			})
+			return
+		}
+		database.DB.Model(&database.Proxy{}).Where("id = ?", proxyID).Update("container_id", cid)
+	}(p.ID, p.Port, entries, p.FakeTLSDomain, p.Backend, p.AdTag)
+
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 

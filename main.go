@@ -104,7 +104,7 @@ func main() {
 		}()
 
 		log.Printf("MTProxy Panel starting on https://:443 (custom certificate)")
-		log.Printf("Default credentials: %s / %s", cfg.DefaultUser, cfg.DefaultPass)
+		log.Printf("Default username: %s", cfg.DefaultUser)
 
 		server := &http.Server{
 			Addr:    ":443",
@@ -152,7 +152,7 @@ func main() {
 		}
 
 		log.Printf("MTProxy Panel starting on https://%s", domain)
-		log.Printf("Default credentials: %s / %s", cfg.DefaultUser, cfg.DefaultPass)
+		log.Printf("Default username: %s", cfg.DefaultUser)
 
 		if err := server.ListenAndServeTLS("", ""); err != nil {
 			log.Fatalf("HTTPS server failed: %v", err)
@@ -161,7 +161,7 @@ func main() {
 		// Plain HTTP
 		addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 		log.Printf("MTProxy Panel starting on http://%s", addr)
-		log.Printf("Default credentials: %s / %s", cfg.DefaultUser, cfg.DefaultPass)
+		log.Printf("Default username: %s", cfg.DefaultUser)
 		log.Printf("Tip: set PANEL_DOMAIN or panel_domain in settings to enable auto-SSL")
 
 		if err := router.Run(addr); err != nil {

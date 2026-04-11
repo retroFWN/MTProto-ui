@@ -75,7 +75,7 @@ func generateConfigTOML(port int, clients []ClientEntry, domain string, adTag st
 	sb.WriteString("[server]\n")
 	sb.WriteString(fmt.Sprintf("port = %d\n", port))
 	sb.WriteString(fmt.Sprintf("metrics_port = %d\n", port+20000))
-	sb.WriteString("metrics_whitelist = [\"0.0.0.0/0\", \"::0/0\"]\n\n")
+	sb.WriteString("metrics_whitelist = [\"127.0.0.0/8\", \"172.16.0.0/12\", \"10.0.0.0/8\", \"192.168.0.0/16\", \"::1/128\"]\n\n")
 
 	sb.WriteString("[server.api]\n")
 	sb.WriteString("enabled = true\n")
@@ -187,19 +187,38 @@ func UpdateTelemtConfig(proxyID uint, port int, clients []ClientEntry, domain st
 // Config-loaded users have no limits; this removes+adds them with full settings.
 func syncTelemtUsersAfterStart(proxyPort int, clients []ClientEntry) {
 	apiPort := TelemtAPIPort(proxyPort)
+
+	// Wait for API with increasing backoff, retry up to 2 minutes
 	var ready bool
-	for i := 0; i < 15; i++ {
-		time.Sleep(2 * time.Second)
+	delays := []time.Duration{2, 2, 3, 3, 5, 5, 10, 10, 15, 15, 20, 30}
+	for _, d := range delays {
+		time.Sleep(d * time.Second)
 		if _, err := telemtListUsers(apiPort); err == nil {
 			ready = true
 			break
 		}
 	}
 	if !ready {
-		log.Printf("telemt API not ready after 30s, skipping user sync for port %d", proxyPort)
+		log.Printf("ERROR: telemt API not ready after 2min for port %d — users have NO quotas/expiry!", proxyPort)
+		// Keep retrying in background every 30s for 10 more minutes
+		go func() {
+			for i := 0; i < 20; i++ {
+				time.Sleep(30 * time.Second)
+				if _, err := telemtListUsers(apiPort); err == nil {
+					log.Printf("telemt API finally ready for port %d, syncing users...", proxyPort)
+					applyUserSync(apiPort, proxyPort, clients)
+					return
+				}
+			}
+			log.Printf("CRITICAL: telemt API never became ready for port %d after 12min", proxyPort)
+		}()
 		return
 	}
 
+	applyUserSync(apiPort, proxyPort, clients)
+}
+
+func applyUserSync(apiPort, proxyPort int, clients []ClientEntry) {
 	synced := 0
 	for _, cl := range clients {
 		if cl.TrafficLimit > 0 || cl.ExpiryTime > 0 {

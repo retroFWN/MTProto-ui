@@ -232,7 +232,7 @@ func TrafficCollector(intervalSec int) {
 		time.Sleep(time.Duration(intervalSec) * time.Second)
 
 		var proxies []database.Proxy
-		database.DB.Where("enabled = ?", true).Find(&proxies)
+		database.DB.Where("enabled = ?", true).Preload("Clients").Find(&proxies)
 
 		for i := range proxies {
 			p := &proxies[i]
@@ -247,8 +247,7 @@ func TrafficCollector(intervalSec int) {
 					continue
 				}
 
-				var clients []database.Client
-				database.DB.Where("proxy_id = ?", p.ID).Find(&clients)
+				clients := p.Clients
 
 				var totalDeltaDown, totalDeltaUp int64
 				needConfigRefresh := false

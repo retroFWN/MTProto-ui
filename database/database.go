@@ -86,7 +86,7 @@ func Seed(username, password string) {
 		Username:     username,
 		PasswordHash: string(hash),
 	})
-	log.Printf("Created default admin user (%s/%s)", username, password)
+	log.Printf("Created default admin user: %s", username)
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────
